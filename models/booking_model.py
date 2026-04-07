@@ -65,6 +65,14 @@ def get_booking_by_id(booking_id):
     return row_to_booking(row) if row else None
 
 
+def booking_id_exists(booking_id):
+    row = get_db().execute(
+        "SELECT 1 FROM bookings WHERE booking_id = ? LIMIT 1",
+        (booking_id,),
+    ).fetchone()
+    return row is not None
+
+
 def get_bookings_by_customer(customer_id):
     rows = get_db().execute(
         f"SELECT {BOOKING_COLUMNS} FROM bookings WHERE customer_id = ?",

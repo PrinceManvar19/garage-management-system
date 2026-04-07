@@ -14,7 +14,9 @@ def find_customer(name, phone, vehicle):
         """
         SELECT id, name, phone, vehicle
         FROM customers
-        WHERE name = ? AND phone = ? AND vehicle = ?
+        WHERE LOWER(name) = LOWER(?)
+          AND phone = ?
+          AND LOWER(vehicle) = LOWER(?)
         """,
         (name, phone, vehicle),
     ).fetchone()

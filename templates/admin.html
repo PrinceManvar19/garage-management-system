@@ -171,11 +171,18 @@
       <i class="fas fa-list-alt"></i> Booking Requests
     </h2>
 
+    <div class="admin-quick-filters">
+      <a href="/admin?date={{ today }}" class="quick-filter-chip {% if filters and filters.date == today %}active{% endif %}">Today</a>
+      <a href="/admin?status=pending" class="quick-filter-chip {% if filters and filters.status == 'pending' %}active{% endif %}">Pending</a>
+      <a href="/admin?status=approved" class="quick-filter-chip {% if filters and filters.status == 'approved' %}active{% endif %}">Approved</a>
+      <a href="/admin?status=checked_in" class="quick-filter-chip {% if filters and filters.status == 'checked_in' %}active{% endif %}">In Garage</a>
+    </div>
+
     <form method="GET" action="/admin" class="dash-form" style="margin-bottom:1.25rem;">
       <div class="dash-form-row" style="align-items:flex-end;">
         <div class="dash-form-group">
           <label>Search</label>
-          <input type="text" name="query" value="{{ filters.query if filters else '' }}" placeholder="Booking ID, phone, or vehicle" />
+          <input type="text" name="query" value="{{ filters.query if filters else '' }}" placeholder="Search by Booking ID / Phone / Vehicle" autofocus />
         </div>
         <div class="dash-form-group">
           <label>Filter by Date</label>
@@ -242,7 +249,7 @@
                 {% elif b.status == 'rejected' %}
                   <span class="status-badge status-rejected">Rejected</span>
                 {% elif b.status == 'completed' %}
-                  <span class="status-badge status-in_service">Completed</span>
+                  <span class="status-badge status-completed">Completed</span>
                 {% else %}
                   <span class="status-badge">{{ b.status }}</span>
                 {% endif %}
@@ -337,6 +344,19 @@
 <script>
   (function() {
     const storageKey = 'garage_whatsapp_action';
+    const searchInput = document.querySelector('input[name="query"]');
+
+    if (searchInput) {
+      searchInput.focus();
+      searchInput.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+          const form = searchInput.closest('form');
+          if (form) {
+            form.submit();
+          }
+        }
+      });
+    }
 
     document.querySelectorAll('[data-whatsapp-trigger="true"]').forEach(function(element) {
       element.addEventListener('click', function() {

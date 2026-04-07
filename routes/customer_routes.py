@@ -27,6 +27,8 @@ def dashboard():
         past_bookings=dashboard_data["bookings"],
         due_for_service=dashboard_data["due_for_service"],
         latest_completed_booking=dashboard_data["latest_completed_booking"],
+        last_service_date=dashboard_data["last_service_date"],
+        next_service_date=dashboard_data["next_service_date"],
         date_slots=get_next_14_days(),
     )
 

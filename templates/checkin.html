@@ -40,9 +40,10 @@
           <div><strong>Brand/Model:</strong> {{ verified_booking.brand_model or '-' }}</div>
           <div><strong>Service Type:</strong> {{ verified_booking.service }}</div>
           <div><strong>Booking Date:</strong> {{ verified_booking.date }}</div>
+          <div><strong>Status:</strong> {{ verified_booking.status_display or verified_booking.status }}</div>
         </div>
 
-        {% if verified_booking.status == 'approved' %}
+        {% if verified_booking.status == 'approved' and verified_booking.date == today %}
         <form method="POST" action="/checkin" style="margin-top:1rem;">
           <input type="hidden" name="action" value="checkin_vehicle" />
           <input type="hidden" name="booking_id" value="{{ verified_booking.booking_id }}" />
@@ -54,8 +55,10 @@
             <i class="fas fa-check-circle"></i> Check-In Vehicle
           </button>
         </form>
+        {% elif verified_booking.date != today %}
+        <div class="dash-sub" style="margin-top:1rem;">This booking is not scheduled for today</div>
         {% else %}
-        <div class="dash-sub" style="margin-top:1rem;">Vehicle already checked-in.</div>
+        <div class="dash-sub" style="margin-top:1rem;">This booking is not available for check-in right now.</div>
         {% endif %}
 
         {% if booking.status == 'checked_in' and booking.phone %}
@@ -86,12 +89,17 @@
       <form method="POST" action="/checkin" class="dash-form">
         <input type="hidden" name="action" value="manual_entry" />
         <div class="dash-form-group">
+          <label>Customer ID (Optional)</label>
+          <input type="text" name="customer_id" placeholder="e.g. CUST1001" style="text-transform:uppercase;" />
+          <small style="color:#64748b;">If provided, name and phone will be taken from the customer record.</small>
+        </div>
+        <div class="dash-form-group">
           <label>Name</label>
-          <input type="text" name="name" required />
+          <input type="text" name="name" />
         </div>
         <div class="dash-form-group">
           <label>Phone</label>
-          <input type="text" name="phone" required />
+          <input type="text" name="phone" />
         </div>
         <div class="dash-form-group">
           <label>Vehicle</label>

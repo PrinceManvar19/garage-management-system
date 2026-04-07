@@ -50,6 +50,8 @@ def find_id():
             flash(f'Your Customer ID: {match["id"]}', "success")
         else:
             flash("No match found. Visit service center.", "error")
+        session["show_find_id_toast"] = True
         return redirect(url_for("auth.find_id"))
 
-    return render_template("find_id.html")
+    toast = session.pop("show_find_id_toast", False)
+    return render_template("find_id.html", toast=toast)

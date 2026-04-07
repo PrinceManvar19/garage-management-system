@@ -62,12 +62,14 @@ def init_db():
         );
 
         CREATE UNIQUE INDEX IF NOT EXISTS idx_booking_id ON bookings(booking_id);
+        CREATE INDEX IF NOT EXISTS idx_booking_status ON bookings(status);
         CREATE INDEX IF NOT EXISTS idx_booking_date ON bookings(date);
         CREATE INDEX IF NOT EXISTS idx_customer_id ON bookings(customer_id);
         """
     )
     migrate_slots_table(db)
     seed_admins(db)
+    migrate_json_data()
     db.commit()
 
 

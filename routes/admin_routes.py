@@ -4,7 +4,7 @@ from services.booking_service import (
     approve_booking as approve_booking_service,
     checkin_vehicle,
     complete_booking_by_id,
-    create_manual_booking,
+    create_manual_booking_with_customer,
     enrich_booking,
     get_admin_bookings,
     get_booking_by_id,
@@ -33,6 +33,7 @@ def admin_dashboard():
         "date": request.args.get("date", ""),
         "status": request.args.get("status", ""),
     }
+    today = get_today_date_string()
     all_bookings = get_admin_bookings()
     bookings = get_admin_bookings(filters)
     stats = get_booking_stats(all_bookings)
@@ -49,6 +50,7 @@ def admin_dashboard():
         completed_count=stats["completed"],
         rejected_count=stats["rejected"],
         filters=filters,
+        today=today,
     )
 
 
@@ -127,32 +129,42 @@ def checkin():
             booking = get_booking_by_id(booking_id)
             if not booking:
                 flash("Invalid Booking ID", "danger")
-            elif booking.get("date") != today:
-                flash("This booking is not scheduled for today", "danger")
-            elif booking.get("status") != STATUS_APPROVED:
-                flash("Booking must be approved before check-in", "danger")
             else:
                 verified_booking = enrich_booking(booking)
+                if booking.get("date") != today:
+                    flash("This booking is not scheduled for today", "danger")
+                elif booking.get("status") != STATUS_APPROVED:
+                    flash("Booking must be approved before check-in", "danger")
 
         elif action == "checkin_vehicle":
             success, message, booking = checkin_vehicle(booking_id, today)
             if not success:
+                verified_booking = enrich_booking(booking) if booking else None
                 flash(message, "danger")
             else:
                 verified_booking = enrich_booking(booking)
                 flash("Vehicle checked-in successfully", "success")
 
         elif action == "manual_entry":
+            customer_id = request.form.get("customer_id", "").strip().upper()
             name = request.form.get("name", "").strip()
             phone = request.form.get("phone", "").strip()
             vehicle = request.form.get("vehicle", "").strip().upper()
             brand_model = request.form.get("brand_model", "").strip()
             service = request.form.get("service", "").strip()
 
-            if not all([name, phone, vehicle, brand_model, service]):
+            if not all([vehicle, brand_model, service]) or (not customer_id and not all([name, phone])):
                 flash("Please fill all manual entry fields", "danger")
             else:
-                success, message, booking = create_manual_booking(name, phone, vehicle, brand_model, service, today)
+                success, message, booking = create_manual_booking_with_customer(
+                    customer_id,
+                    name,
+                    phone,
+                    vehicle,
+                    brand_model,
+                    service,
+                    today,
+                )
                 if not success:
                     flash(message, "danger")
                 else:

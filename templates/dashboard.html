@@ -188,8 +188,8 @@
   }
 
   .status-pill.checked_in {
-    background: rgba(249, 115, 22, 0.14);
-    color: #c2410c;
+    background: rgba(59, 130, 246, 0.14);
+    color: #1d4ed8;
   }
 
   .status-pill.rejected {
@@ -198,8 +198,8 @@
   }
 
   .status-pill.completed {
-    background: rgba(59, 130, 246, 0.14);
-    color: #1d4ed8;
+    background: rgba(107, 114, 128, 0.16);
+    color: #4b5563;
   }
 
   .status-pill.other {
@@ -235,6 +235,24 @@
     {% if latest_completed_booking %}
     <p class="verify-hint" style="margin-top:0.5rem; color:#92400e;">Last completed booking: {{ latest_completed_booking.booking_id }} on {{ latest_completed_booking.completed_at or latest_completed_booking.date }}.</p>
     {% endif %}
+  </div>
+  {% endif %}
+
+  {% if last_service_date or next_service_date %}
+  <div class="dash-card">
+    <h2 class="dash-card-title">
+      <i class="fas fa-calendar-days"></i> Service Timeline
+    </h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;">
+      <div>
+        <div class="verify-hint" style="margin-top:0;">Last Service</div>
+        <div style="font-weight:800;color:#1f2937;">{{ last_service_date or '-' }}</div>
+      </div>
+      <div>
+        <div class="verify-hint" style="margin-top:0;">Next Service</div>
+        <div style="font-weight:800;color:#1f2937;">{{ next_service_date or '-' }}</div>
+      </div>
+    </div>
   </div>
   {% endif %}
 

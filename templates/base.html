@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Shreeji Auto Services – Premium two-wheeler service center. Expert mechanics, genuine parts, reliable care." />
+  <meta name="description" content="Shreeji Auto Services - Premium two-wheeler service center. Expert mechanics, genuine parts, reliable care." />
   <title>{% block title %}Shreeji Auto Services{% endblock %}</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -51,7 +51,20 @@
 
   </nav>
 
-  <div class="flash-messages" id="flashMessages"></div>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if request.endpoint == 'auth.find_id' and toast|default(false) and messages %}
+      <div class="toast-container position-fixed top-0 end-0 p-3" id="flashToastContainer">
+        {% for category, message in messages %}
+          <div class="toast align-items-center text-white bg-{{ 'success' if category == 'success' else 'danger' }} border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="5000" data-bs-autohide="true">
+            <div class="d-flex">
+              <div class="toast-body">{{ message }}</div>
+              <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
 
   <main>
     {% block content %}{% endblock %}
@@ -73,15 +86,18 @@
             <div class="footer-brand-tagline">Ride with confidence</div>
           </div>
           <p class="footer-brand-desc">
-            Expert two-wheeler care, genuine parts, and reliable service —
+            Expert two-wheeler care, genuine parts, and reliable service -
             keeping your ride in peak condition since 2009.
           </p>
-          <div class="footer-rating">
-            <i class="fas fa-star"></i><i class="fas fa-star"></i>
-            <i class="fas fa-star"></i><i class="fas fa-star"></i>
-            <i class="fas fa-star"></i>
-            <span>4.9 / 5 · 2,400+ reviews</span>
-          </div>
+          <a href="https://share.google/E2KBu8QOEqSHnokiM" target="_blank" rel="noreferrer" class="rating-link-footer footer-rating">
+            <span class="footer-rating-stars">
+              <i class="fas fa-star"></i><i class="fas fa-star"></i>
+              <i class="fas fa-star"></i><i class="fas fa-star"></i>
+              <i class="far fa-star"></i>
+            </span>
+            <span>4.4 / 5</span>
+            <small>86+ reviews on Google</small>
+          </a>
         </div>
 
         <div>
@@ -111,7 +127,7 @@
             <li><i class="fas fa-map-marker-alt"></i> Ahmedabad, Gujarat</li>
             <li><i class="fas fa-phone"></i> +91 98983 34402</li>
             <li><i class="fas fa-envelope"></i> info@shreeji.in</li>
-            <li><i class="fas fa-clock"></i> Mon–Sat, 9am – 7pm</li>
+            <li><i class="fas fa-clock"></i> Mon-Sat, 9am - 7pm</li>
           </ul>
         </div>
 
@@ -139,7 +155,14 @@
   </script>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const toastElList = [].slice.call(document.querySelectorAll('.toast'));
+      toastElList
+        .map((toastEl) => new bootstrap.Toast(toastEl))
+        .forEach((toast) => toast.show());
+    });
+  </script>
   {% block extra_scripts %}{% endblock %}
 </body>
 </html>
- 

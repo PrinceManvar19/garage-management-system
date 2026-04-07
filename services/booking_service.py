@@ -3,6 +3,7 @@ import sqlite3
 from datetime import datetime, timedelta
 
 from models.booking_model import (
+    booking_id_exists,
     create_booking,
     get_booking_by_id as fetch_booking_by_id,
     get_bookings_by_customer,
@@ -51,6 +52,25 @@ def generate_manual_booking_id():
     return _generate_incremental_id("MANUAL")
 
 
+def normalize_phone(phone):
+    normalized = (phone or "").strip()
+    normalized = normalized.replace("+91", "")
+    normalized = re.sub(r"\D", "", normalized)
+    if len(normalized) > 10 and normalized.startswith("91"):
+        normalized = normalized[-10:]
+    return normalized
+
+
+def generate_unique_booking_id(prefix):
+    latest_id = get_latest_booking_id(prefix)
+    start_number = 1001 if not latest_id else int(latest_id.replace(prefix, "")) + 1
+    for number in range(start_number, start_number + 25):
+        booking_id = f"{prefix}{number:04d}"
+        if not booking_id_exists(booking_id):
+            return booking_id
+    raise ValueError("Unable to generate a unique booking ID.")
+
+
 def get_customer_bookings(customer_id):
     customer_map = get_customer_map()
     bookings = [enrich_booking(booking, customer_map) for booking in get_bookings_by_customer(customer_id)]
@@ -62,21 +82,28 @@ def get_customer_dashboard_data(customer_id):
     completed_bookings = [booking for booking in bookings if booking.get("status") == STATUS_COMPLETED]
     latest_completed = sort_bookings_newest_first(completed_bookings)[0] if completed_bookings else None
     due_for_service = False
+    last_service_date = None
+    next_service_date = None
 
     if latest_completed is not None:
         completed_at = parse_datetime(latest_completed.get("completed_at")) or parse_datetime(latest_completed.get("date"))
         if completed_at and datetime.now() - completed_at > timedelta(days=90):
             due_for_service = True
+        if completed_at:
+            last_service_date = completed_at.strftime("%Y-%m-%d")
+            next_service_date = (completed_at + timedelta(days=90)).strftime("%Y-%m-%d")
 
     return {
         "bookings": bookings,
         "latest_completed_booking": latest_completed,
         "due_for_service": due_for_service,
+        "last_service_date": last_service_date,
+        "next_service_date": next_service_date,
     }
 
 
 def _validate_phone(phone):
-    return bool(PHONE_PATTERN.fullmatch((phone or "").strip()))
+    return bool(PHONE_PATTERN.fullmatch(normalize_phone(phone)))
 
 
 def _begin_write_transaction():
@@ -106,10 +133,10 @@ def create_booking_for_customer(customer_id, name, phone, vehicle, brand_model, 
     if not is_valid:
         return False, message, None
     customer = get_customer_by_id(customer_id.strip().upper())
-    resolved_phone = (phone or customer.get("phone", "")).strip()
+    resolved_phone = normalize_phone(phone or customer.get("phone", ""))
 
     booking = {
-        "booking_id": generate_booking_id(),
+        "booking_id": generate_unique_booking_id("BOOK"),
         "customer_id": customer_id,
         "name": name,
         "phone": resolved_phone,
@@ -147,10 +174,10 @@ def create_manual_booking(name, phone, vehicle, brand_model, service, date):
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     booking = {
-        "booking_id": generate_manual_booking_id(),
+        "booking_id": generate_unique_booking_id("MANUAL"),
         "customer_id": "",
         "name": name.strip(),
-        "phone": phone.strip(),
+        "phone": normalize_phone(phone),
         "vehicle": vehicle.strip().upper(),
         "brand_model": brand_model.strip(),
         "service": service.strip(),
@@ -161,12 +188,25 @@ def create_manual_booking(name, phone, vehicle, brand_model, service, date):
         "completed_at": None,
     }
     try:
+        _begin_write_transaction()
         create_booking(booking)
         get_db().commit()
     except sqlite3.Error:
         get_db().rollback()
         return False, "Walk-in entry could not be saved right now. Please try again.", None
     return True, "", booking
+
+
+def create_manual_booking_with_customer(customer_id, name, phone, vehicle, brand_model, service, date):
+    normalized_customer_id = (customer_id or "").strip().upper()
+    if normalized_customer_id:
+        customer = get_customer_by_id(normalized_customer_id)
+        if not customer:
+            return False, "Customer ID was not found.", None
+        name = customer.get("name", name)
+        phone = customer.get("phone", phone)
+
+    return create_manual_booking(name, phone, vehicle, brand_model, service, date)
 
 
 def get_admin_bookings(filters=None):
@@ -252,6 +292,7 @@ def checkin_vehicle(booking_id, today):
 
     checked_in_at = datetime.now().strftime("%Y-%m-%d %H:%M")
     try:
+        _begin_write_transaction()
         update_booking_status(booking_id, STATUS_CHECKED_IN, checked_in_at, None)
         get_db().commit()
     except sqlite3.Error:
@@ -266,6 +307,7 @@ def complete_booking_by_id(booking_id):
         return False, "Booking not found.", None
     completed_at = datetime.now().strftime("%Y-%m-%d %H:%M")
     try:
+        _begin_write_transaction()
         update_booking_status(booking_id, STATUS_COMPLETED, booking.get("checked_in_at"), completed_at)
         get_db().commit()
     except sqlite3.Error:

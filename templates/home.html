@@ -205,15 +205,15 @@
     </div>
     <div class="trust-divider"></div>
     <div class="trust-item">
-      <div class="trust-stars">
-        <i class="fas fa-star"></i><i class="fas fa-star"></i>
-        <i class="fas fa-star"></i><i class="fas fa-star"></i>
-        <i class="fas fa-star"></i>
-      </div>
-      <div class="trust-text">
-        <strong>4.9 / 5 Rating</strong>
-        <span>2,400+ Google reviews</span>
-      </div>
+      <a href="https://share.google/E2KBu8QOEqSHnokiM" target="_blank" rel="noreferrer" class="rating-link">
+        <div class="trust-stars">
+          <i class="fas fa-star"></i><i class="fas fa-star"></i>
+          <i class="fas fa-star"></i><i class="fas fa-star"></i>
+          <i class="fas fa-star-half-alt"></i>
+        </div>
+        <span>4.4 / 5 Rating</span>
+        <small>86 Google reviews</small>
+      </a>
     </div>
     <div class="trust-divider"></div>
     <div class="trust-item">
@@ -231,6 +231,97 @@
         <span>Most jobs done in 4 hours</span>
       </div>
     </div>
+  </div>
+</section>
+
+<section class="brand-section">
+  <div class="services-header" style="margin-bottom:2rem;">
+    <span class="section-label">Brands We Service</span>
+    <h2 class="section-title">Trusted Across Leading Two-Wheeler Brands</h2>
+    <p class="section-sub">Factory-grade care for daily commuters, premium tourers, and everything in between.</p>
+  </div>
+
+  <div class="brand-slider-wrapper">
+    <button class="brand-btn left" aria-label="Scroll brands left">&#10094;</button>
+
+    <div class="brand-slider">
+      <div class="brand-track">
+        <div class="brand-item">
+          <img src="{{ url_for('static', filename='images/brands/hero.svg') }}" alt="Hero">
+          <span>Hero</span>
+        </div>
+        <div class="brand-item">
+          <img src="{{ url_for('static', filename='images/brands/honda.svg') }}" alt="Honda">
+          <span>Honda</span>
+        </div>
+        <div class="brand-item">
+          <img src="{{ url_for('static', filename='images/brands/bajaj.svg') }}" alt="Bajaj">
+          <span>Bajaj</span>
+        </div>
+        <div class="brand-item">
+          <img src="{{ url_for('static', filename='images/brands/tvs.svg') }}" alt="TVS">
+          <span>TVS</span>
+        </div>
+        <div class="brand-item">
+          <img src="{{ url_for('static', filename='images/brands/yamaha.svg') }}" alt="Yamaha">
+          <span>Yamaha</span>
+        </div>
+        <div class="brand-item">
+          <img src="{{ url_for('static', filename='images/brands/royal-enfield.svg') }}" alt="Royal Enfield">
+          <span>Royal Enfield</span>
+        </div>
+        <div class="brand-item">
+          <img src="{{ url_for('static', filename='images/brands/hero.svg') }}" alt="Hero">
+          <span>Hero</span>
+        </div>
+        <div class="brand-item">
+          <img src="{{ url_for('static', filename='images/brands/honda.svg') }}" alt="Honda">
+          <span>Honda</span>
+        </div>
+        <div class="brand-item">
+          <img src="{{ url_for('static', filename='images/brands/bajaj.svg') }}" alt="Bajaj">
+          <span>Bajaj</span>
+        </div>
+        <div class="brand-item">
+          <img src="{{ url_for('static', filename='images/brands/tvs.svg') }}" alt="TVS">
+          <span>TVS</span>
+        </div>
+        <div class="brand-item">
+          <img src="{{ url_for('static', filename='images/brands/yamaha.svg') }}" alt="Yamaha">
+          <span>Yamaha</span>
+        </div>
+        <div class="brand-item">
+          <img src="{{ url_for('static', filename='images/brands/royal-enfield.svg') }}" alt="Royal Enfield">
+          <span>Royal Enfield</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="brand-btn right" aria-label="Scroll brands right">&#10095;</button>
+  </div>
+</section>
+
+<section class="google-rating-section">
+  <div class="container">
+    <a href="https://share.google/E2KBu8QOEqSHnokiM"
+       target="_blank"
+       class="google-rating-card">
+
+      <div class="rating-stars">
+        ⭐ ⭐ ⭐ ⭐ ☆
+      </div>
+
+      <h3>4.4 Rating</h3>
+
+      <p>Based on 86 Google Reviews</p>
+
+      <span class="view-link">View all reviews →</span>
+
+      <span style="font-size:12px; color:gray;">
+        Verified on Google
+      </span>
+
+    </a>
   </div>
 </section>
 
@@ -369,4 +460,56 @@
   </div>
 </section>
 
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  (function() {
+    const track = document.querySelector('.brand-track');
+    const leftButton = document.querySelector('.brand-slider-wrapper .left');
+    const rightButton = document.querySelector('.brand-slider-wrapper .right');
+
+    if (!track || !leftButton || !rightButton) {
+      return;
+    }
+
+    const step = 200;
+    let autoScroll;
+
+    function startAutoScroll() {
+      stopAutoScroll();
+      autoScroll = window.setInterval(function() {
+        const maxScroll = track.scrollWidth - track.clientWidth;
+        if (track.scrollLeft >= maxScroll - 1) {
+          track.scrollTo({ left: 0, behavior: 'auto' });
+          return;
+        }
+        track.scrollBy({ left: 1, behavior: 'auto' });
+      }, 20);
+    }
+
+    function stopAutoScroll() {
+      if (autoScroll) {
+        window.clearInterval(autoScroll);
+      }
+    }
+
+    leftButton.onclick = function() {
+      track.scrollBy({ left: -step, behavior: 'smooth' });
+    };
+
+    rightButton.onclick = function() {
+      track.scrollBy({ left: step, behavior: 'smooth' });
+    };
+
+    track.addEventListener('mouseenter', stopAutoScroll);
+    track.addEventListener('mouseleave', startAutoScroll);
+    leftButton.addEventListener('mouseenter', stopAutoScroll);
+    leftButton.addEventListener('mouseleave', startAutoScroll);
+    rightButton.addEventListener('mouseenter', stopAutoScroll);
+    rightButton.addEventListener('mouseleave', startAutoScroll);
+
+    startAutoScroll();
+  })();
+</script>
 {% endblock %}
