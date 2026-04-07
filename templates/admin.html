@@ -1,0 +1,370 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard - Shreeji Auto Services{% endblock %}
+
+{% block content %}
+<div class="dashboard-wrap">
+  <div class="dash-header">
+    <div>
+      <h1 class="dash-title">
+        <i class="fas fa-tachometer-alt"></i> Admin Dashboard
+      </h1>
+      <p class="dash-sub">Shreeji Auto Services - Garage Management</p>
+    </div>
+    <div style="display:flex;gap:0.75rem;align-items:center;">
+      <a href="/checkin" class="dash-btn-secondary">
+        <i class="fas fa-motorcycle"></i> Check-In
+      </a>
+      <a href="/logout" class="dash-logout">
+        <i class="fas fa-sign-out-alt"></i> Logout
+      </a>
+    </div>
+  </div>
+
+  <div class="admin-stats">
+    <div class="admin-stat-card">
+      <i class="fas fa-calendar-check"></i>
+      <div class="admin-stat-num">{{ total_bookings }}</div>
+      <div class="admin-stat-label">Total Bookings</div>
+    </div>
+    <div class="admin-stat-card warn">
+      <i class="fas fa-clock"></i>
+      <div class="admin-stat-num">{{ pending_count }}</div>
+      <div class="admin-stat-label">Pending</div>
+    </div>
+    <div class="admin-stat-card success">
+      <i class="fas fa-check-circle"></i>
+      <div class="admin-stat-num">{{ approved_count }}</div>
+      <div class="admin-stat-label">Approved</div>
+    </div>
+    <div class="admin-stat-card info">
+      <i class="fas fa-flag-checkered"></i>
+      <div class="admin-stat-num">{{ completed_count }}</div>
+      <div class="admin-stat-label">Completed</div>
+    </div>
+    <div class="admin-stat-card done">
+      <i class="fas fa-times-circle"></i>
+      <div class="admin-stat-num">{{ rejected_count }}</div>
+      <div class="admin-stat-label">Rejected</div>
+    </div>
+  </div>
+
+  <div class="dash-card">
+    <h2 class="dash-card-title">
+      <i class="fas fa-warehouse"></i> Vehicles in Garage
+    </h2>
+
+    <div class="dash-table-wrap">
+      <table class="dash-table">
+        <thead>
+          <tr>
+            <th>Booking ID</th>
+            <th>Name</th>
+            <th>Vehicle</th>
+            <th>Service</th>
+            <th>Check-In Time</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if vehicles_in_garage %}
+            {% for b in vehicles_in_garage %}
+            {% set booking = b %}
+            <tr>
+              <td><strong>{{ b.booking_id }}</strong></td>
+              <td>{{ b.name }}</td>
+              <td>
+                <div>{{ b.vehicle }}</div>
+                {% if b.brand_model %}<small>{{ b.brand_model }}</small>{% endif %}
+              </td>
+              <td>{{ b.service }}</td>
+              <td>{{ b.checked_in_at or '-' }}</td>
+              <td>
+                {% if booking.phone %}
+                  {% set message =
+                  "Hello " ~ booking.name ~ "%0A%0A" ~
+                  "Your vehicle service is COMPLETED.%0A" ~
+                  "Booking ID: " ~ booking.booking_id ~ "%0A%0A" ~
+                  "You may collect your vehicle.%0A%0A" ~
+                  "Thank you - Shreeji Auto Services"
+                  %}
+                  <a target="_blank"
+                     class="btn btn-success btn-sm"
+                     data-whatsapp-button="true"
+                     data-booking-id="{{ booking.booking_id }}"
+                     data-action="completed"
+                     style="display:none;"
+                     href="https://wa.me/{{ '91' ~ booking.phone }}?text={{ message }}">
+                    WhatsApp
+                  </a>
+                {% endif %}
+                <a href="/admin/complete/{{ b.booking_id }}"
+                   class="btn btn-primary btn-sm"
+                   data-whatsapp-trigger="true"
+                   data-booking-id="{{ b.booking_id }}"
+                   data-action="completed">Mark Completed</a>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="6" class="dash-empty">No active vehicles in the garage.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="dash-card">
+    <h2 class="dash-card-title">
+      <i class="fas fa-calendar-alt"></i> Slot Management
+    </h2>
+
+    <form method="POST" action="/admin/set-slots" class="dash-form">
+      <div class="dash-form-row" style="align-items:flex-end;">
+        <div class="dash-form-group">
+          <label>Date</label>
+          <input type="date" name="date" id="slotDate" required />
+        </div>
+        <div class="dash-form-group">
+          <label>Total Slots Available</label>
+          <input type="number" name="slots" min="0" max="50" placeholder="e.g. 5" required />
+        </div>
+        <div class="dash-form-group" style="flex:0;">
+          <button type="submit" class="dash-btn-primary" style="margin-top:0;">
+            <i class="fas fa-save"></i> Set Slots
+          </button>
+        </div>
+      </div>
+    </form>
+
+    <div class="dash-table-wrap" style="margin-top:1.5rem;">
+      <table class="dash-table">
+        <thead>
+          <tr><th>Date</th><th>Total Slots</th><th>Booked</th><th>Available</th></tr>
+        </thead>
+        <tbody>
+          {% if slots %}
+            {% for date, slot in slots|dictsort(reverse=true) %}
+            <tr>
+              <td>{{ date }}</td>
+              <td>{{ slot.total }}</td>
+              <td>{{ slot.booked }}</td>
+              <td>
+                {% set available = slot.total - slot.booked %}
+                <span class="slot-badge{% if available <= 0 %} slot-full{% endif %}">{{ available }}</span>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="4" class="dash-empty">No slot data available.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="dash-card">
+    <h2 class="dash-card-title">
+      <i class="fas fa-list-alt"></i> Booking Requests
+    </h2>
+
+    <form method="GET" action="/admin" class="dash-form" style="margin-bottom:1.25rem;">
+      <div class="dash-form-row" style="align-items:flex-end;">
+        <div class="dash-form-group">
+          <label>Search</label>
+          <input type="text" name="query" value="{{ filters.query if filters else '' }}" placeholder="Booking ID, phone, or vehicle" />
+        </div>
+        <div class="dash-form-group">
+          <label>Filter by Date</label>
+          <input type="date" name="date" value="{{ filters.date if filters else '' }}" />
+        </div>
+        <div class="dash-form-group">
+          <label>Filter by Status</label>
+          <select name="status">
+            <option value="">All Statuses</option>
+            <option value="pending" {% if filters and filters.status == 'pending' %}selected{% endif %}>Pending</option>
+            <option value="approved" {% if filters and filters.status == 'approved' %}selected{% endif %}>Approved</option>
+            <option value="checked_in" {% if filters and filters.status == 'checked_in' %}selected{% endif %}>Checked-In</option>
+            <option value="completed" {% if filters and filters.status == 'completed' %}selected{% endif %}>Completed</option>
+            <option value="rejected" {% if filters and filters.status == 'rejected' %}selected{% endif %}>Rejected</option>
+          </select>
+        </div>
+        <div class="dash-form-group" style="flex:0; display:flex; gap:0.75rem;">
+          <button type="submit" class="dash-btn-primary" style="margin-top:0;">
+            <i class="fas fa-search"></i> Apply
+          </button>
+          <a href="/admin" class="dash-btn-secondary">
+            <i class="fas fa-rotate-left"></i> Reset
+          </a>
+        </div>
+      </div>
+    </form>
+
+    <div class="dash-table-wrap">
+      <table class="dash-table">
+        <thead>
+          <tr>
+            <th>Booking ID</th>
+            <th>Customer</th>
+            <th>Vehicle</th>
+            <th>Service</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if bookings %}
+            {% for b in bookings %}
+            {% set booking = b %}
+            <tr>
+              <td><strong>{{ b.booking_id }}</strong></td>
+              <td>
+                <div>{{ b.name }}</div>
+                {% if b.customer_id %}<small>{{ b.customer_id }}</small>{% endif %}
+              </td>
+              <td>
+                <div>{{ b.vehicle }}</div>
+                {% if b.brand_model %}<small>{{ b.brand_model }}</small>{% endif %}
+              </td>
+              <td>{{ b.service }}</td>
+              <td>{{ b.date }}</td>
+              <td>
+                {% if b.status == 'pending' %}
+                  <span class="status-badge status-pending">Pending</span>
+                {% elif b.status == 'approved' %}
+                  <span class="status-badge status-approved">Approved</span>
+                {% elif b.status == 'checked_in' %}
+                  <span class="status-badge status-in_service">Checked-In</span>
+                {% elif b.status == 'rejected' %}
+                  <span class="status-badge status-rejected">Rejected</span>
+                {% elif b.status == 'completed' %}
+                  <span class="status-badge status-in_service">Completed</span>
+                {% else %}
+                  <span class="status-badge">{{ b.status }}</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="action-btns">
+                  {% if b.status == 'pending' %}
+                    <a href="/admin/approve/{{ b.booking_id }}"
+                       class="btn btn-success btn-sm"
+                       data-whatsapp-trigger="true"
+                       data-booking-id="{{ b.booking_id }}"
+                       data-action="approved">Approve</a>
+                    <a href="/admin/reject/{{ b.booking_id }}"
+                       class="btn btn-danger btn-sm"
+                       data-whatsapp-trigger="true"
+                       data-booking-id="{{ b.booking_id }}"
+                       data-action="rejected">Reject</a>
+                  {% elif b.status == 'approved' and b.phone %}
+                    {% set message =
+                    "Hello " ~ booking.name ~ "%0A%0A" ~
+                    "Your service request (" ~ booking.service ~ ") has been APPROVED.%0A%0A" ~
+                    "Booking Details:%0A" ~
+                    "Booking ID: " ~ booking.booking_id ~ "%0A" ~
+                    "Customer ID: " ~ booking.customer_id ~ "%0A" ~
+                    "Vehicle: " ~ booking.vehicle ~ "%0A" ~
+                    "Service Date: " ~ booking.date ~ "%0A%0A" ~
+                    "Please visit our garage on the scheduled date.%0A%0A" ~
+                    "Thank you - Shreeji Auto Services"
+                    %}
+                    <a target="_blank"
+                       class="btn btn-success btn-sm"
+                       data-whatsapp-button="true"
+                       data-booking-id="{{ booking.booking_id }}"
+                       data-action="approved"
+                       style="display:none;"
+                       href="https://wa.me/{{ '91' ~ booking.phone }}?text={{ message }}">
+                      WhatsApp
+                    </a>
+                  {% elif b.status == 'rejected' and b.phone %}
+                    {% set message =
+                    "Hello " ~ booking.name ~ "%0A%0A" ~
+                    "Your service request (" ~ booking.service ~ ") has been DECLINED.%0A%0A" ~
+                    "For assistance, please contact us.%0A%0A" ~
+                    "Thank you - Shreeji Auto Services"
+                    %}
+                    <a target="_blank"
+                       class="btn btn-success btn-sm"
+                       data-whatsapp-button="true"
+                       data-booking-id="{{ booking.booking_id }}"
+                       data-action="rejected"
+                       style="display:none;"
+                       href="https://wa.me/{{ '91' ~ booking.phone }}?text={{ message }}">
+                      WhatsApp
+                    </a>
+                  {% elif b.status == 'completed' and b.phone %}
+                    {% set message =
+                    "Hello " ~ booking.name ~ "%0A%0A" ~
+                    "Your vehicle service is COMPLETED.%0A" ~
+                    "Booking ID: " ~ booking.booking_id ~ "%0A%0A" ~
+                    "You may collect your vehicle.%0A%0A" ~
+                    "Thank you - Shreeji Auto Services"
+                    %}
+                    <a target="_blank"
+                       class="btn btn-success btn-sm"
+                       data-whatsapp-button="true"
+                       data-booking-id="{{ booking.booking_id }}"
+                       data-action="completed"
+                       style="display:none;"
+                       href="https://wa.me/{{ '91' ~ booking.phone }}?text={{ message }}">
+                      WhatsApp
+                    </a>
+                  {% else %}
+                    <span class="dash-sub">No actions</span>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="7" class="dash-empty">No bookings found.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  (function() {
+    const storageKey = 'garage_whatsapp_action';
+
+    document.querySelectorAll('[data-whatsapp-trigger="true"]').forEach(function(element) {
+      element.addEventListener('click', function() {
+        localStorage.setItem(storageKey, JSON.stringify({
+          bookingId: element.dataset.bookingId,
+          action: element.dataset.action
+        }));
+      });
+    });
+
+    let storedAction = null;
+    try {
+      storedAction = JSON.parse(localStorage.getItem(storageKey) || 'null');
+    } catch (error) {
+      storedAction = null;
+    }
+
+    if (!storedAction || !storedAction.bookingId || !storedAction.action) {
+      return;
+    }
+
+    const selector = '[data-whatsapp-button="true"][data-booking-id="' + storedAction.bookingId + '"][data-action="' + storedAction.action + '"]';
+    const button = document.querySelector(selector);
+
+    if (button) {
+      button.style.display = 'inline-block';
+      localStorage.removeItem(storageKey);
+    }
+  })();
+</script>
+{% endblock %}

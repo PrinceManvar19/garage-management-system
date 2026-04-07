@@ -1,0 +1,533 @@
+{% extends "base.html" %}
+{% block title %}Dashboard â€“ Shreeji Auto Services{% endblock %}
+
+{% block extra_head %}
+<style>
+  .verify-book-card {
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at top right, rgba(162, 4, 5, 0.12), transparent 35%),
+      linear-gradient(145deg, rgba(26, 26, 30, 0.98) 0%, rgba(33, 33, 40, 0.96) 100%);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .verify-book-card::after {
+    content: "";
+    position: absolute;
+    inset: auto -120px -120px auto;
+    width: 260px;
+    height: 260px;
+    border-radius: 999px;
+    background: rgba(162, 4, 5, 0.18);
+    filter: blur(10px);
+    pointer-events: none;
+  }
+
+  .verify-book-grid {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .verify-copy {
+    max-width: 520px;
+  }
+
+  .verify-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.45rem 0.9rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+
+  .verify-title {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(2rem, 4vw, 2.8rem);
+    font-weight: 800;
+    line-height: 1.05;
+    margin: 1rem 0 0.85rem;
+  }
+
+  .verify-subtitle {
+    color: rgba(255, 255, 255, 0.72);
+    margin-bottom: 0;
+    max-width: 520px;
+  }
+
+  .verify-step-card,
+  .booking-step-card,
+  .success-step-card {
+    background: rgba(255, 255, 255, 0.98);
+    color: #1a1a1e;
+    border-radius: 24px;
+    padding: 1.35rem;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
+  }
+
+  .booking-step-card,
+  .success-step-card {
+    margin-top: 1rem;
+  }
+
+  .step-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(162, 4, 5, 0.12);
+    color: #a20405;
+    font-weight: 800;
+    margin-bottom: 0.85rem;
+  }
+
+  .step-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 800;
+    margin-bottom: 0.35rem;
+  }
+
+  .step-copy {
+    color: #5b5b62;
+    margin-bottom: 1rem;
+  }
+
+  .verify-book-card .form-control,
+  .verify-book-card .form-select {
+    min-height: 54px;
+    border-radius: 16px;
+    border-color: rgba(26, 26, 30, 0.12);
+    box-shadow: none;
+  }
+
+  .verify-book-card .form-control:focus,
+  .verify-book-card .form-select:focus {
+    border-color: rgba(162, 4, 5, 0.5);
+    box-shadow: 0 0 0 0.24rem rgba(162, 4, 5, 0.12);
+  }
+
+  .verify-book-card .btn {
+    min-height: 54px;
+    border-radius: 16px;
+    font-weight: 700;
+  }
+
+  .verify-book-card .btn-danger {
+    background: linear-gradient(135deg, #c32728 0%, #a20405 55%, #7c0304 100%);
+    border: none;
+  }
+
+  .verify-hint {
+    color: #8d8d96;
+    font-size: 0.92rem;
+    margin-top: 0.75rem;
+  }
+
+  .success-step-card {
+    border: 1px solid rgba(34, 197, 94, 0.22);
+    background: linear-gradient(135deg, rgba(240, 253, 244, 0.98), rgba(236, 253, 245, 0.98));
+  }
+
+  .success-step-card h3 {
+    color: #166534;
+    font-family: 'Syne', sans-serif;
+    font-size: 1.3rem;
+    font-weight: 800;
+    margin-bottom: 0.55rem;
+  }
+
+  .success-step-card p {
+    color: #1f2937;
+    margin-bottom: 0;
+  }
+
+  .booking-history-card .dash-table td strong {
+    color: #a20405;
+  }
+
+  .booking-history-card .dash-table-wrap {
+    overflow-x: auto;
+  }
+
+  .booking-history-card .dash-table {
+    min-width: 520px;
+  }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.84rem;
+    font-weight: 700;
+    text-transform: capitalize;
+  }
+
+  .status-pill.pending {
+    background: rgba(245, 158, 11, 0.14);
+    color: #b45309;
+  }
+
+  .status-pill.approved {
+    background: rgba(34, 197, 94, 0.14);
+    color: #15803d;
+  }
+
+  .status-pill.checked_in {
+    background: rgba(249, 115, 22, 0.14);
+    color: #c2410c;
+  }
+
+  .status-pill.rejected {
+    background: rgba(239, 68, 68, 0.14);
+    color: #b91c1c;
+  }
+
+  .status-pill.completed {
+    background: rgba(59, 130, 246, 0.14);
+    color: #1d4ed8;
+  }
+
+  .status-pill.other {
+    background: rgba(59, 130, 246, 0.14);
+    color: #1d4ed8;
+  }
+
+  .verify-hidden {
+    display: none;
+  }
+
+  @media (max-width: 991px) {
+    .verify-book-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-wrap">
+  <div class="dash-header">
+    <h1 class="dash-title">Welcome, {{ session.user.name }}</h1>
+    <p class="dash-sub">{{ session.user.id }}</p>
+  </div>
+
+  {% if due_for_service %}
+  <div class="dash-card" style="border:1px solid rgba(245, 158, 11, 0.35); background:linear-gradient(135deg, rgba(255, 251, 235, 0.98), rgba(255, 247, 237, 0.98));">
+    <h2 class="dash-card-title" style="color:#b45309;">
+      <i class="fas fa-bell"></i> Service Reminder
+    </h2>
+    <p style="margin:0; color:#92400e; font-weight:700;">Your vehicle is due for service.</p>
+    {% if latest_completed_booking %}
+    <p class="verify-hint" style="margin-top:0.5rem; color:#92400e;">Last completed booking: {{ latest_completed_booking.booking_id }} on {{ latest_completed_booking.completed_at or latest_completed_booking.date }}.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <div class="dash-card verify-book-card">
+    <div class="verify-book-grid">
+      <div class="verify-copy">
+        <span class="verify-eyebrow">
+          <i class="fas fa-shield-check"></i>
+          Verify Customer & Book Service
+        </span>
+        <h2 class="verify-title">Book your next service without leaving the dashboard.</h2>
+        <p class="verify-subtitle">Verify your customer ID, choose an available slot, and send your booking request instantly. Your booking history stays right below for easy tracking.</p>
+      </div>
+
+      <div>
+        <div class="verify-step-card">
+          <div class="step-label">1</div>
+          <h3 class="step-title">Verify Customer</h3>
+          <p class="step-copy">Enter your customer ID exactly as shown in your account to unlock the booking form.</p>
+
+          <form id="verifyCustomerForm">
+            <label for="verifyCustomerId" class="form-label fw-bold">Customer ID</label>
+            <input type="text" class="form-control" id="verifyCustomerId" placeholder="CUST1001" required>
+            <button type="submit" class="btn btn-danger w-100 mt-3">
+              <i class="fas fa-badge-check me-2"></i>
+              Verify
+            </button>
+          </form>
+
+          <div id="verifyMessage" class="verify-hint">Logged in as {{ session.user.id }}.</div>
+        </div>
+
+        <div id="bookingStepCard" class="booking-step-card verify-hidden">
+          <div class="step-label">2</div>
+          <h3 class="step-title">Complete Booking Form</h3>
+          <p class="step-copy">Choose your vehicle details and preferred service date from the available slots.</p>
+
+          <form id="dashboardBookingForm">
+            <div class="mb-3">
+              <label for="vehicleNumber" class="form-label fw-bold">Vehicle Number Plate</label>
+              <input type="text" class="form-control" id="vehicleNumber" name="vehicle_number" placeholder="GJ01AB1234" required>
+            </div>
+
+            <div class="mb-3">
+              <label for="brandModel" class="form-label fw-bold">Brand / Model</label>
+              <input type="text" class="form-control" id="brandModel" name="brand_model" placeholder="Honda Activa 6G" required>
+            </div>
+
+            <div class="mb-3">
+              <label for="serviceType" class="form-label fw-bold">Service Type</label>
+              <select class="form-select" id="serviceType" name="service" required>
+                <option value="">Select Service</option>
+                <option value="Full Service">Full Service</option>
+                <option value="Engine Work">Engine Work</option>
+                <option value="Washing">Washing</option>
+              </select>
+            </div>
+
+            <div class="mb-3">
+              <label for="bookingDate" class="form-label fw-bold">Preferred Date</label>
+              <select class="form-select" id="bookingDate" name="date" required>
+                <option value="">Select Date</option>
+                {% for slot in date_slots if slot.available > 0 %}
+                <option value="{{ slot.date }}">{{ slot.label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <button type="submit" class="btn btn-danger w-100">
+              <i class="fas fa-paper-plane me-2"></i>
+              Send Booking Request
+            </button>
+          </form>
+
+          <div id="bookingMessage" class="verify-hint">Available dates are loaded from your current slot schedule.</div>
+        </div>
+
+        <div id="bookingSuccessCard" class="success-step-card verify-hidden">
+          <div class="step-label" style="background: rgba(34, 197, 94, 0.14); color: #15803d;">3</div>
+          <h3>Booking request sent successfully.</h3>
+          <p id="bookingSuccessText">Your Booking ID is BOOKXXXX. Please wait for confirmation or check WhatsApp or revisit this site in a few hours.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dash-card booking-history-card">
+    <h2 class="dash-card-title">
+      <i class="fas fa-history"></i> Customer History
+    </h2>
+    <p class="verify-hint" style="margin-top:-0.25rem; margin-bottom:1rem;">All your past bookings are shown here with the latest request first.</p>
+    {% if bookings %}
+    <div class="dash-table-wrap">
+      <table class="dash-table">
+        <thead>
+          <tr>
+            <th>Booking ID</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Service</th>
+          </tr>
+        </thead>
+        <tbody id="bookingHistoryTableBody">
+          {% for b in bookings %}
+          {% set booking_status = (b.status or 'pending')|lower %}
+          <tr>
+            <td><strong>{{ b.booking_id }}</strong></td>
+            <td>{{ b.date }}</td>
+            <td>
+              <span class="status-pill {{ booking_status if booking_status in ['pending', 'approved', 'checked_in', 'rejected', 'completed'] else 'other' }}">
+                {{ b.status_display or b.status }}
+              </span>
+              {% if booking_status == 'checked_in' %}
+              <div class="verify-hint">Vehicle received at garage{% if b.checked_in_at %} on {{ b.checked_in_at }}{% endif %}.</div>
+              {% elif booking_status == 'completed' %}
+              <div class="verify-hint">Service completed{% if b.completed_at %} on {{ b.completed_at }}{% endif %}.</div>
+              {% endif %}
+            </td>
+            <td>{{ b.service }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p id="emptyBookingsText">No bookings yet.</p>
+    <div class="dash-table-wrap">
+      <table class="dash-table verify-hidden" id="bookingHistoryTable">
+        <thead>
+          <tr>
+            <th>Booking ID</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Service</th>
+          </tr>
+        </thead>
+        <tbody id="bookingHistoryTableBody"></tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  const loggedInCustomerId = "{{ session.user.id }}";
+  const verifyForm = document.getElementById('verifyCustomerForm');
+  const verifyInput = document.getElementById('verifyCustomerId');
+  const verifyMessage = document.getElementById('verifyMessage');
+  const bookingStepCard = document.getElementById('bookingStepCard');
+  const bookingForm = document.getElementById('dashboardBookingForm');
+  const bookingMessage = document.getElementById('bookingMessage');
+  const bookingSuccessCard = document.getElementById('bookingSuccessCard');
+  const bookingSuccessText = document.getElementById('bookingSuccessText');
+  const emptyBookingsText = document.getElementById('emptyBookingsText');
+  const bookingHistoryTable = document.getElementById('bookingHistoryTable');
+  const bookingHistoryTableBody = document.getElementById('bookingHistoryTableBody');
+
+  function setVerifyMessage(message, tone) {
+    verifyMessage.textContent = message;
+    verifyMessage.style.color = tone === 'success' ? '#bbf7d0' : tone === 'error' ? '#fecaca' : '#d1d5db';
+  }
+
+  function setBookingMessage(message, tone) {
+    bookingMessage.textContent = message;
+    bookingMessage.style.color = tone === 'success' ? '#166534' : tone === 'error' ? '#b91c1c' : '#6b7280';
+  }
+
+  function formatStatusClass(status) {
+    const lower = (status || 'pending').toLowerCase();
+    if (lower === 'pending' || lower === 'approved' || lower === 'checked_in' || lower === 'rejected' || lower === 'completed') {
+      return lower;
+    }
+    return 'other';
+  }
+
+  function getStatusDisplay(status) {
+    const lower = (status || 'pending').toLowerCase();
+    if (lower === 'pending') {
+      return 'Waiting for Approval';
+    }
+    if (lower === 'approved') {
+      return 'Approved ✅';
+    }
+    if (lower === 'rejected') {
+      return 'Rejected ❌';
+    }
+    if (lower === 'completed') {
+      return 'Service Done ✔';
+    }
+    return status;
+  }
+
+  function getStatusDisplay(status) {
+    const lower = (status || 'pending').toLowerCase();
+    if (lower === 'pending') {
+      return 'Waiting for Approval';
+    }
+    if (lower === 'approved') {
+      return 'Approved';
+    }
+    if (lower === 'checked_in') {
+      return 'Vehicle received at garage';
+    }
+    if (lower === 'rejected') {
+      return 'Rejected';
+    }
+    if (lower === 'completed') {
+      return 'Service completed';
+    }
+    return status;
+  }
+
+  function appendBookingToHistory(bookingId, date, service, status) {
+    if (emptyBookingsText) {
+      emptyBookingsText.classList.add('verify-hidden');
+    }
+
+    if (bookingHistoryTable) {
+      bookingHistoryTable.classList.remove('verify-hidden');
+    }
+
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td><strong>${bookingId}</strong></td>
+      <td>${date}</td>
+      <td><span class="status-pill ${formatStatusClass(status)}">${getStatusDisplay(status)}</span></td>
+      <td>${service}</td>
+    `;
+
+    bookingHistoryTableBody.insertBefore(row, bookingHistoryTableBody.firstChild);
+  }
+
+  verifyForm.addEventListener('submit', function(event) {
+    event.preventDefault();
+    const enteredId = verifyInput.value.trim().toUpperCase();
+
+    if (!enteredId) {
+      setVerifyMessage('Please enter your customer ID to continue.', 'error');
+      bookingStepCard.classList.add('verify-hidden');
+      return;
+    }
+
+    if (enteredId !== loggedInCustomerId) {
+      setVerifyMessage('Customer ID does not match the logged-in account. Please try again.', 'error');
+      bookingStepCard.classList.add('verify-hidden');
+      return;
+    }
+
+    setVerifyMessage('Customer verified successfully. You can now complete your booking form below.', 'success');
+    bookingStepCard.classList.remove('verify-hidden');
+    bookingSuccessCard.classList.add('verify-hidden');
+  });
+
+  bookingForm.addEventListener('submit', async function(event) {
+    event.preventDefault();
+
+    const formData = new FormData(bookingForm);
+    const vehicle = formData.get('vehicle_number');
+    const service = formData.get('service');
+    const date = formData.get('date');
+
+    setBookingMessage('Sending your booking request...', 'default');
+
+    try {
+      const response = await fetch('/book', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+
+      const responseText = await response.text();
+
+      if (response.redirected && response.url.includes('/dashboard')) {
+        const explicitIdMatch = responseText.match(/Booking ID:\s*(BOOK\d+)/i);
+        const fallbackIdMatches = responseText.match(/BOOK\d+/g);
+        const bookingId = explicitIdMatch ? explicitIdMatch[1] : (fallbackIdMatches ? fallbackIdMatches[fallbackIdMatches.length - 1] : 'BOOKXXXX');
+
+        bookingSuccessText.textContent = `Your Booking ID is ${bookingId}. Please wait for confirmation or check WhatsApp or revisit this site in a few hours.`;
+        bookingSuccessCard.classList.remove('verify-hidden');
+        setBookingMessage(`Booking created successfully with ID ${bookingId}.`, 'success');
+        appendBookingToHistory(bookingId, date, service, 'pending');
+        bookingForm.reset();
+        return;
+      }
+
+      setBookingMessage('Booking could not be completed. Please check your selected date and try again.', 'error');
+    } catch (error) {
+      setBookingMessage('Something went wrong while sending your booking request. Please try again.', 'error');
+    }
+  });
+</script>
+{% endblock %}

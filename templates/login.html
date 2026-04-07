@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block title %}Login - Shreeji Auto Services{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+  <div class="auth-card">
+    <img src="{{ url_for('static', filename='images/logo1.png') }}"
+         class="auth-logo"
+         alt="Logo">
+
+    <h2 class="auth-title">
+      Welcome Back to <span>Shreeji</span>
+    </h2>
+
+    <p class="auth-subtitle">
+      Sign in with your details to continue to your dashboard
+    </p>
+
+    <form method="POST" action="/login" class="auth-form">
+      <label class="form-label" for="loginName">Full Name *</label>
+      <input type="text" class="form-control auth-input" id="loginName" name="name" placeholder="Rahul Patel" required>
+
+      <label class="form-label" for="loginPhone">Phone Number *</label>
+      <input type="tel" class="form-control auth-input" id="loginPhone" name="phone" placeholder="9876543210" required>
+
+      <label class="form-label" for="loginCustomerId">Customer ID *</label>
+      <input type="text" class="form-control auth-input" id="loginCustomerId" name="customer_id" placeholder="CUST1001" required>
+
+      <button type="submit" class="btn btn-primary w-100 auth-btn">
+        Continue to Dashboard
+      </button>
+    </form>
+
+    <a href="/find-id" class="auth-link">Find Customer ID</a>
+  </div>
+</div>
+{% endblock %}
