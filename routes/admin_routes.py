@@ -38,6 +38,13 @@ def admin_dashboard():
     bookings = get_admin_bookings(filters)
     stats = get_booking_stats(all_bookings)
     vehicles_in_garage = [booking for booking in all_bookings if booking.get("status") == STATUS_CHECKED_IN]
+    checkin_booking_id = request.args.get("checkin_booking_id", "").strip().upper()
+    verified_checkin_booking = None
+
+    if checkin_booking_id:
+        verified_checkin_booking = get_booking_by_id(checkin_booking_id)
+        if not verified_checkin_booking:
+            flash("Booking not found", "danger")
 
     return render_template(
         "admin.html",
@@ -51,7 +58,22 @@ def admin_dashboard():
         rejected_count=stats["rejected"],
         filters=filters,
         today=today,
+        verified_checkin_booking=verified_checkin_booking,
+        checkin_booking_id=checkin_booking_id,
     )
+
+
+@admin_bp.route("/admin/checkin/verify", methods=["POST"])
+def verify_checkin_booking():
+    if not _require_admin():
+        return redirect(url_for("main.home"))
+
+    booking_id = request.form.get("booking_id", "").strip().upper()
+    if not booking_id:
+        flash("Booking ID is required", "danger")
+        return redirect(url_for("admin.admin_dashboard"))
+
+    return redirect(url_for("admin.admin_dashboard", checkin_booking_id=booking_id))
 
 
 @admin_bp.route("/admin/set-slots", methods=["POST"])
@@ -110,6 +132,16 @@ def reject_booking(booking_id):
 
     success, message, _booking = reject_booking_service(booking_id)
     flash(message if not success else "Booking Rejected", "error" if not success else "danger")
+    return redirect(url_for("admin.admin_dashboard"))
+
+
+@admin_bp.route("/admin/checkin/<booking_id>")
+def admin_checkin_booking(booking_id):
+    if not _require_admin():
+        return redirect(url_for("main.home"))
+
+    success, message, _booking = checkin_vehicle(booking_id, get_today_date_string())
+    flash(message if not success else "Vehicle checked-in successfully", "danger" if not success else "success")
     return redirect(url_for("admin.admin_dashboard"))
 
 

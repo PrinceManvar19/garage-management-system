@@ -245,6 +245,8 @@ def approve_booking(booking_id):
         return False, "Booking not found.", None
     if booking.get("status") == STATUS_APPROVED:
         return False, "Booking already approved.", booking
+    if booking.get("status") != STATUS_PENDING:
+        return False, "Only pending bookings can be approved.", booking
 
     try:
         _begin_write_transaction()
@@ -255,6 +257,9 @@ def approve_booking(booking_id):
         if booking.get("status") == STATUS_APPROVED:
             get_db().rollback()
             return False, "Booking already approved.", booking
+        if booking.get("status") != STATUS_PENDING:
+            get_db().rollback()
+            return False, "Only pending bookings can be approved.", booking
         slot = get_slot_availability(booking["date"])
         if not slot or slot["available"] <= 0:
             get_db().rollback()
@@ -271,8 +276,23 @@ def reject_booking(booking_id):
     booking = fetch_booking_by_id(booking_id)
     if not booking:
         return False, "Booking not found.", None
+    if booking.get("status") == STATUS_REJECTED:
+        return False, "Booking already rejected.", booking
+    if booking.get("status") != STATUS_PENDING:
+        return False, "Only pending bookings can be rejected.", booking
 
     try:
+        _begin_write_transaction()
+        booking = fetch_booking_by_id(booking_id)
+        if not booking:
+            get_db().rollback()
+            return False, "Booking not found.", None
+        if booking.get("status") == STATUS_REJECTED:
+            get_db().rollback()
+            return False, "Booking already rejected.", booking
+        if booking.get("status") != STATUS_PENDING:
+            get_db().rollback()
+            return False, "Only pending bookings can be rejected.", booking
         update_booking_status(booking_id, STATUS_REJECTED, None, None)
         get_db().commit()
     except sqlite3.Error:
@@ -293,6 +313,16 @@ def checkin_vehicle(booking_id, today):
     checked_in_at = datetime.now().strftime("%Y-%m-%d %H:%M")
     try:
         _begin_write_transaction()
+        booking = fetch_booking_by_id(booking_id)
+        if not booking:
+            get_db().rollback()
+            return False, "Invalid Booking ID.", None
+        if booking.get("date") != today:
+            get_db().rollback()
+            return False, "This booking is not scheduled for today.", booking
+        if booking.get("status") != STATUS_APPROVED:
+            get_db().rollback()
+            return False, "Booking must be approved before check-in.", booking
         update_booking_status(booking_id, STATUS_CHECKED_IN, checked_in_at, None)
         get_db().commit()
     except sqlite3.Error:
@@ -305,9 +335,19 @@ def complete_booking_by_id(booking_id):
     booking = fetch_booking_by_id(booking_id)
     if not booking:
         return False, "Booking not found.", None
+    if booking.get("status") != STATUS_CHECKED_IN:
+        return False, "Only checked-in vehicles can be marked complete.", booking
+
     completed_at = datetime.now().strftime("%Y-%m-%d %H:%M")
     try:
         _begin_write_transaction()
+        booking = fetch_booking_by_id(booking_id)
+        if not booking:
+            get_db().rollback()
+            return False, "Booking not found.", None
+        if booking.get("status") != STATUS_CHECKED_IN:
+            get_db().rollback()
+            return False, "Only checked-in vehicles can be marked complete.", booking
         update_booking_status(booking_id, STATUS_COMPLETED, booking.get("checked_in_at"), completed_at)
         get_db().commit()
     except sqlite3.Error:

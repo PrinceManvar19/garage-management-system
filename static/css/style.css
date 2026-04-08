@@ -781,7 +781,7 @@ a  { text-decoration: none; color: inherit; }
   .footer-top    { grid-template-columns: 1fr 1fr; gap: 2rem; }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 768px) {
   .navbar-links { display: none; }
   .stats-grid   { grid-template-columns: 1fr 1fr; }
   .footer-top   { grid-template-columns: 1fr; }
@@ -1690,70 +1690,91 @@ input:focus {
 }
 
 .brand-section {
-  padding: 88px 5% 40px;
+  padding: 106px 5% 48px;
   background: linear-gradient(180deg, #faf7f2 0%, #ffffff 100%);
 }
 
 .brand-slider-wrapper {
-  max-width: 1200px;
+  position: relative;
+  max-width: 1000px;
   margin: 0 auto;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 1rem;
+  overflow: hidden;
+  padding: 20px 40px;
 }
 
 .brand-slider {
-  position: relative;
-  overflow: hidden;
-  padding: 0.5rem 0;
-  mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
-  -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding: 4px 0;
+}
+
+.brand-slider::-webkit-scrollbar {
+  display: none;
 }
 
 .brand-track {
   display: flex;
   align-items: center;
-  gap: 1.25rem;
-  overflow-x: auto;
-  scroll-behavior: smooth;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  padding: 0.35rem 0.1rem;
+  gap: 20px;
+  min-width: max-content;
+  padding: 0;
 }
 
 .brand-track::-webkit-scrollbar {
   display: none;
 }
 
-.brand-item {
+.brand-item,
+.brand-card {
   text-align: center;
+  width: 140px;
   min-width: 140px;
-  flex: 0 0 auto;
-  padding: 1rem 0.9rem;
-  background: rgba(255,255,255,0.9);
+  height: 160px;
+  flex: 0 0 140px;
+  padding: 20px;
+  background: #fff;
   border: 1px solid rgba(15,23,42,0.08);
-  box-shadow: 0 8px 28px rgba(15,23,42,0.06);
-  border-radius: 20px;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
   transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
 }
 
-.brand-item img {
-  width: 60px;
+.brand-logo {
   height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.brand-logo img,
+.brand-item img {
+  max-height: 100%;
+  max-width: 100%;
+  height: auto;
+  width: auto;
   object-fit: contain;
-  display: block;
-  margin: 0 auto;
   filter: grayscale(100%);
   transition: 0.3s;
 }
 
 .brand-item span {
   display: block;
-  margin-top: 8px;
   font-size: 14px;
   font-weight: 700;
-  color: #334155;
+  text-align: center;
+  color: #333;
 }
 
 .brand-item:hover {
@@ -1767,48 +1788,63 @@ input:focus {
   transform: scale(1.1);
 }
 
-.brand-btn {
-  background: rgba(17,17,20,0.72);
-  border: none;
-  color: white;
-  width: 44px;
-  height: 44px;
+.brand-btn,
+.brand-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  padding: 0;
+  border: none;
+  background: #a20405;
+  color: white;
   cursor: pointer;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.1rem;
+  font-size: 18px;
+  z-index: 10;
   box-shadow: 0 10px 24px rgba(15,23,42,0.14);
-  transition: transform var(--transition), background var(--transition);
+  transition: background var(--transition), box-shadow var(--transition);
 }
 
-.brand-btn:hover {
+.brand-arrow.left,
+.brand-btn.left {
+  left: 0;
+}
+
+.brand-arrow.right,
+.brand-btn.right {
+  right: 0;
+}
+
+.brand-btn:hover,
+.brand-arrow:hover {
   background: var(--accent);
-  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(162,4,5,0.28);
 }
 
-@media (max-width: 600px) {
+@media (max-width: 768px) {
   .brand-section { padding: 72px 4% 32px; }
   .brand-slider-wrapper {
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
+    padding: 20px;
   }
-  .brand-slider {
-    order: 1;
+  .brand-item,
+  .brand-card {
+    width: 120px;
+    min-width: 120px;
+    flex: 0 0 120px;
+    height: 140px;
   }
-  .brand-btn {
-    width: 40px;
-    height: 40px;
+  .brand-logo {
+    height: 50px;
   }
-  .brand-slider-wrapper .left,
-  .brand-slider-wrapper .right {
-    order: 2;
-  }
-  .brand-item {
-    min-width: 124px;
-    padding: 0.85rem 0.7rem;
+  .brand-btn,
+  .brand-arrow {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
   }
 }
 
