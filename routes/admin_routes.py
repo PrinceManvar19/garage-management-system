@@ -1,4 +1,8 @@
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+import csv
+from io import StringIO
+from urllib.parse import quote
+
+from flask import Blueprint, Response, flash, redirect, render_template, request, session, url_for
 
 from services.booking_service import (
     approve_booking as approve_booking_service,
@@ -9,10 +13,12 @@ from services.booking_service import (
     get_admin_bookings,
     get_booking_by_id,
     get_booking_stats,
+    mark_whatsapp_sent,
+    normalize_phone,
     reject_booking as reject_booking_service,
 )
 from services.slot_service import get_slots_for_admin, set_slot_total
-from utils.constants import STATUS_APPROVED, STATUS_CHECKED_IN
+from utils.constants import STATUS_APPROVED, STATUS_CHECKED_IN, STATUS_COMPLETED, STATUS_REJECTED
 from utils.helpers import get_today_date_string
 
 
@@ -21,6 +27,36 @@ admin_bp = Blueprint("admin", __name__)
 
 def _require_admin():
     return session.get("role") == "admin"
+
+
+def _build_whatsapp_message(booking):
+    status_labels = {
+        STATUS_APPROVED: "Approved",
+        STATUS_REJECTED: "Rejected",
+        STATUS_COMPLETED: "Completed",
+    }
+    status = booking.get("status")
+    return (
+        f"Hello {booking.get('name', '')}\n\n"
+        f"Booking ID: {booking.get('booking_id', '')}\n"
+        f"Service: {booking.get('service', '')}\n"
+        f"Vehicle: {booking.get('vehicle', '')}\n"
+        f"Date: {booking.get('date', '')}\n"
+        f"Status: {status_labels.get(status, (status or '').title())}\n\n"
+        "Thank you - Shreeji Auto Services"
+    )
+
+
+def _csv_response(filename, headers, rows):
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(headers)
+    writer.writerows(rows)
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @admin_bp.route("/admin")
@@ -74,6 +110,58 @@ def verify_checkin_booking():
         return redirect(url_for("admin.admin_dashboard"))
 
     return redirect(url_for("admin.admin_dashboard", checkin_booking_id=booking_id))
+
+
+@admin_bp.route("/export/bookings")
+def export_bookings():
+    if not _require_admin():
+        return redirect(url_for("main.home"))
+
+    bookings = get_admin_bookings()
+    rows = [
+        [
+            booking.get("booking_id", ""),
+            booking.get("customer_id", ""),
+            booking.get("name", ""),
+            booking.get("phone", ""),
+            booking.get("vehicle", ""),
+            booking.get("service", ""),
+            booking.get("date", ""),
+            booking.get("status", ""),
+            booking.get("created_at", ""),
+        ]
+        for booking in bookings
+    ]
+    return _csv_response(
+        "bookings.csv",
+        ["booking_id", "customer_id", "name", "phone", "vehicle", "service", "date", "status", "created_at"],
+        rows,
+    )
+
+
+@admin_bp.route("/export/garage")
+def export_garage():
+    if not _require_admin():
+        return redirect(url_for("main.home"))
+
+    bookings = [booking for booking in get_admin_bookings() if booking.get("status") == STATUS_CHECKED_IN]
+    rows = [
+        [
+            booking.get("booking_id", ""),
+            booking.get("name", ""),
+            booking.get("phone", ""),
+            booking.get("vehicle", ""),
+            booking.get("service", ""),
+            booking.get("date", ""),
+            booking.get("checked_in_at", ""),
+        ]
+        for booking in bookings
+    ]
+    return _csv_response(
+        "garage_data.csv",
+        ["booking_id", "name", "phone", "vehicle", "service", "date", "checked_in_at"],
+        rows,
+    )
 
 
 @admin_bp.route("/admin/set-slots", methods=["POST"])
@@ -143,6 +231,34 @@ def admin_checkin_booking(booking_id):
     success, message, _booking = checkin_vehicle(booking_id, get_today_date_string())
     flash(message if not success else "Vehicle checked-in successfully", "danger" if not success else "success")
     return redirect(url_for("admin.admin_dashboard"))
+
+
+@admin_bp.route("/admin/whatsapp/<booking_id>")
+def send_booking_whatsapp(booking_id):
+    if not _require_admin():
+        return redirect(url_for("main.home"))
+
+    booking = get_booking_by_id(booking_id)
+    if not booking:
+        flash("Booking not found", "danger")
+        return redirect(url_for("admin.admin_dashboard"))
+
+    if booking.get("status") not in {STATUS_APPROVED, STATUS_REJECTED, STATUS_COMPLETED}:
+        flash("WhatsApp is available only for approved, rejected, or completed bookings", "danger")
+        return redirect(url_for("admin.admin_dashboard"))
+
+    phone = normalize_phone(booking.get("phone", ""))
+    if not phone:
+        flash("Customer phone number is not available", "danger")
+        return redirect(url_for("admin.admin_dashboard"))
+
+    success, message, _updated_booking = mark_whatsapp_sent(booking_id)
+    if not success:
+        flash(message, "danger")
+        return redirect(url_for("admin.admin_dashboard"))
+
+    whatsapp_url = f"https://wa.me/91{phone}?text={quote(_build_whatsapp_message(booking))}"
+    return redirect(whatsapp_url)
 
 
 @admin_bp.route("/checkin", methods=["GET", "POST"])

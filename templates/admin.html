@@ -129,9 +129,17 @@
   </div>
 
   <div class="dash-card">
-    <h2 class="dash-card-title">
-      <i class="fas fa-warehouse"></i> Vehicles in Garage
-    </h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+      <h2 class="dash-card-title">
+        <i class="fas fa-warehouse"></i> Vehicles in Garage
+      </h2>
+      <a href="/export/garage" class="btn btn-secondary btn-sm">
+        <i class="fas fa-download"></i> Export Garage Data
+      </a>
+    </div>
+    <p class="dash-sub" style="margin-top:-0.25rem; margin-bottom:1rem;">
+      Vehicles in Garage: {{ vehicles_in_garage|length }}
+    </p>
 
     <div class="dash-table-wrap">
       <table class="dash-table">
@@ -139,9 +147,11 @@
           <tr>
             <th>Booking ID</th>
             <th>Customer Name</th>
-            <th>Vehicle</th>
+            <th>Phone</th>
+            <th>Vehicle Number</th>
+            <th>Brand/Model</th>
             <th>Service</th>
-            <th>Status</th>
+            <th>Check-In Time</th>
             <th>Action</th>
           </tr>
         </thead>
@@ -152,12 +162,11 @@
             <tr>
               <td><strong>{{ b.booking_id }}</strong></td>
               <td>{{ b.name }}</td>
-              <td>
-                <div>{{ b.vehicle }}</div>
-                {% if b.brand_model %}<small>{{ b.brand_model }}</small>{% endif %}
-              </td>
+              <td>{{ b.phone or '-' }}</td>
+              <td>{{ b.vehicle }}</td>
+              <td>{{ b.brand_model or '-' }}</td>
               <td>{{ b.service }}</td>
-              <td><span class="status-badge status-in_service">Checked-In</span></td>
+              <td>{{ b.checked_in_at or '-' }}</td>
               <td>
                 {% if booking.phone %}
                   {% set message =
@@ -190,7 +199,7 @@
             {% endfor %}
           {% else %}
             <tr>
-              <td colspan="6" class="dash-empty">No active vehicles in the garage.</td>
+              <td colspan="8" class="dash-empty">No active vehicles in the garage.</td>
             </tr>
           {% endif %}
         </tbody>
@@ -250,9 +259,14 @@
   </div>
 
   <div class="dash-card">
-    <h2 class="dash-card-title">
-      <i class="fas fa-list-alt"></i> Booking Requests
-    </h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+      <h2 class="dash-card-title">
+        <i class="fas fa-list-alt"></i> Booking Requests
+      </h2>
+      <a href="/export/bookings" class="btn btn-primary btn-sm">
+        <i class="fas fa-download"></i> Export Bookings
+      </a>
+    </div>
 
     <div class="admin-quick-filters">
       <a href="/admin?date={{ today }}" class="quick-filter-chip {% if filters and filters.date == today %}active{% endif %}">Today</a>
@@ -299,10 +313,12 @@
           <tr>
             <th>Booking ID</th>
             <th>Customer</th>
+            <th>Phone</th>
             <th>Vehicle</th>
             <th>Service</th>
             <th>Date</th>
             <th>Status</th>
+            <th>WhatsApp</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -316,6 +332,7 @@
                 <div>{{ b.name }}</div>
                 {% if b.customer_id %}<small>{{ b.customer_id }}</small>{% endif %}
               </td>
+              <td>{{ b.phone or '-' }}</td>
               <td>
                 <div>{{ b.vehicle }}</div>
                 {% if b.brand_model %}<small>{{ b.brand_model }}</small>{% endif %}
@@ -338,6 +355,13 @@
                 {% endif %}
               </td>
               <td>
+                {% if b.whatsapp_sent %}
+                  <span class="status-badge status-approved">Sent</span>
+                {% else %}
+                  <span class="status-badge status-rejected">Not Sent</span>
+                {% endif %}
+              </td>
+              <td>
                 <div class="action-btns">
                   {% if b.status == 'pending' %}
                     <a href="/admin/approve/{{ b.booking_id }}"
@@ -351,30 +375,22 @@
                        data-booking-id="{{ b.booking_id }}"
                        data-action="rejected">Reject</a>
                   {% elif b.status == 'approved' %}
-                    <a href="/admin/checkin/{{ b.booking_id }}"
-                       class="btn btn-primary btn-sm"
-                       data-whatsapp-trigger="true"
-                       data-booking-id="{{ b.booking_id }}"
-                       data-action="checked_in">Check-In</a>
                     {% if b.phone %}
-                      {% set message =
-                      "Hello " ~ booking.name ~ "\n\n" ~
-                      "Booking ID: " ~ booking.booking_id ~ "\n" ~
-                      "Service Type: " ~ booking.service ~ "\n" ~
-                      "Vehicle Number: " ~ booking.vehicle ~ "\n" ~
-                      "Date: " ~ booking.date ~ "\n" ~
-                      "Status: Approved\n\n" ~
-                      "Your booking has been approved. Please visit our garage on the scheduled date.\n\n" ~
-                      "Thank you - Shreeji Auto Services"
-                      %}
                       <a target="_blank"
                          class="btn btn-success btn-sm"
                          data-whatsapp-button="true"
                          data-booking-id="{{ booking.booking_id }}"
                          data-action="approved"
                          style="display:none;"
-                         href="https://wa.me/{{ '91' ~ booking.phone }}?text={{ message|urlencode }}">
+                         href="/admin/whatsapp/{{ booking.booking_id }}">
                         Send WhatsApp
+                      </a>
+                      <a target="_blank"
+                         class="btn btn-outline btn-sm"
+                         href="/admin/whatsapp/{{ booking.booking_id }}"
+                         title="Resend WhatsApp Message"
+                         aria-label="Resend WhatsApp Message">
+                        <i class="fas fa-rotate-right"></i>
                       </a>
                     {% endif %}
                   {% elif b.status == 'checked_in' %}
@@ -383,69 +399,47 @@
                        data-whatsapp-trigger="true"
                        data-booking-id="{{ b.booking_id }}"
                        data-action="completed">Mark Complete</a>
-                    {% if b.phone %}
-                      {% set message =
-                      "Hello " ~ booking.name ~ "%0A%0A" ~
-                      "Your vehicle has been received at our garage.%0A" ~
-                      "Service is in progress.%0A%0A" ~
-                      "We will notify you once ready.%0A%0A" ~
-                      "- Shreeji Auto Services"
-                      %}
-                      <a target="_blank"
-                         class="btn btn-success btn-sm"
-                         data-whatsapp-button="true"
-                         data-booking-id="{{ booking.booking_id }}"
-                         data-action="checked_in"
-                         style="display:none;"
-                         href="https://wa.me/{{ '91' ~ booking.phone }}?text={{ message }}">
-                        WhatsApp
-                      </a>
-                    {% endif %}
                   {% elif b.status == 'completed' %}
-                    <span class="dash-sub">No actions</span>
                     {% if b.phone %}
-                      {% set message =
-                      "Hello " ~ booking.name ~ "\n\n" ~
-                      "Booking ID: " ~ booking.booking_id ~ "\n" ~
-                      "Service Type: " ~ booking.service ~ "\n" ~
-                      "Vehicle Number: " ~ booking.vehicle ~ "\n" ~
-                      "Date: " ~ booking.date ~ "\n" ~
-                      "Status: Completed\n\n" ~
-                      "Your vehicle service is completed. You may collect your vehicle.\n\n" ~
-                      "Thank you - Shreeji Auto Services"
-                      %}
                       <a target="_blank"
                          class="btn btn-success btn-sm"
                          data-whatsapp-button="true"
                          data-booking-id="{{ booking.booking_id }}"
                          data-action="completed"
                          style="display:none;"
-                         href="https://wa.me/{{ '91' ~ booking.phone }}?text={{ message|urlencode }}">
+                         href="/admin/whatsapp/{{ booking.booking_id }}">
                         Send WhatsApp
                       </a>
+                      <a target="_blank"
+                         class="btn btn-outline btn-sm"
+                         href="/admin/whatsapp/{{ booking.booking_id }}"
+                         title="Resend WhatsApp Message"
+                         aria-label="Resend WhatsApp Message">
+                        <i class="fas fa-rotate-right"></i>
+                      </a>
+                    {% else %}
+                      <span class="dash-sub">No actions</span>
                     {% endif %}
                   {% elif b.status == 'rejected' %}
-                    <span class="dash-sub">No actions</span>
                     {% if b.phone %}
-                      {% set message =
-                      "Hello " ~ booking.name ~ "\n\n" ~
-                      "Booking ID: " ~ booking.booking_id ~ "\n" ~
-                      "Service Type: " ~ booking.service ~ "\n" ~
-                      "Vehicle Number: " ~ booking.vehicle ~ "\n" ~
-                      "Date: " ~ booking.date ~ "\n" ~
-                      "Status: Rejected\n\n" ~
-                      "Your booking has been rejected. For assistance, please contact us.\n\n" ~
-                      "Thank you - Shreeji Auto Services"
-                      %}
                       <a target="_blank"
                          class="btn btn-success btn-sm"
                          data-whatsapp-button="true"
                          data-booking-id="{{ booking.booking_id }}"
                          data-action="rejected"
                          style="display:none;"
-                         href="https://wa.me/{{ '91' ~ booking.phone }}?text={{ message|urlencode }}">
+                         href="/admin/whatsapp/{{ booking.booking_id }}">
                         Send WhatsApp
                       </a>
+                      <a target="_blank"
+                         class="btn btn-outline btn-sm"
+                         href="/admin/whatsapp/{{ booking.booking_id }}"
+                         title="Resend WhatsApp Message"
+                         aria-label="Resend WhatsApp Message">
+                        <i class="fas fa-rotate-right"></i>
+                      </a>
+                    {% else %}
+                      <span class="dash-sub">No actions</span>
                     {% endif %}
                   {% else %}
                     <span class="dash-sub">No actions</span>
@@ -456,7 +450,7 @@
             {% endfor %}
           {% else %}
             <tr>
-              <td colspan="7" class="dash-empty">No bookings found.</td>
+              <td colspan="9" class="dash-empty">No bookings found.</td>
             </tr>
           {% endif %}
         </tbody>

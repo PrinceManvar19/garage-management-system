@@ -13,9 +13,9 @@ def get_status_display(status):
     status_map = {
         STATUS_PENDING: "Waiting for Approval",
         STATUS_APPROVED: "Approved",
-        STATUS_CHECKED_IN: "Vehicle received at garage",
+        STATUS_CHECKED_IN: "In Progress",
         STATUS_REJECTED: "Rejected",
-        STATUS_COMPLETED: "Service completed",
+        STATUS_COMPLETED: "Completed",
     }
     normalized = (status or STATUS_PENDING).lower()
     return status_map.get(normalized, normalized.title())

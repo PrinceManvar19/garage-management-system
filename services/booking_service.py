@@ -10,6 +10,7 @@ from models.booking_model import (
     get_latest_booking_id,
     search_bookings,
     update_booking_status,
+    update_whatsapp_sent,
 )
 from models.customer_model import get_customer_by_id, get_customer_map
 from models.db import get_db
@@ -148,6 +149,7 @@ def create_booking_for_customer(customer_id, name, phone, vehicle, brand_model, 
         "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "checked_in_at": None,
         "completed_at": None,
+        "whatsapp_sent": 0,
     }
     try:
         _begin_write_transaction()
@@ -186,6 +188,7 @@ def create_manual_booking(name, phone, vehicle, brand_model, service, date):
         "created_at": timestamp,
         "checked_in_at": timestamp,
         "completed_at": None,
+        "whatsapp_sent": 0,
     }
     try:
         _begin_write_transaction()
@@ -264,7 +267,7 @@ def approve_booking(booking_id):
         if not slot or slot["available"] <= 0:
             get_db().rollback()
             return False, "No slots available for this date.", booking
-        update_booking_status(booking_id, STATUS_APPROVED, None, None)
+        update_booking_status(booking_id, STATUS_APPROVED, None, None, 0)
         get_db().commit()
     except sqlite3.Error:
         get_db().rollback()
@@ -293,7 +296,7 @@ def reject_booking(booking_id):
         if booking.get("status") != STATUS_PENDING:
             get_db().rollback()
             return False, "Only pending bookings can be rejected.", booking
-        update_booking_status(booking_id, STATUS_REJECTED, None, None)
+        update_booking_status(booking_id, STATUS_REJECTED, None, None, 0)
         get_db().commit()
     except sqlite3.Error:
         get_db().rollback()
@@ -348,9 +351,23 @@ def complete_booking_by_id(booking_id):
         if booking.get("status") != STATUS_CHECKED_IN:
             get_db().rollback()
             return False, "Only checked-in vehicles can be marked complete.", booking
-        update_booking_status(booking_id, STATUS_COMPLETED, booking.get("checked_in_at"), completed_at)
+        update_booking_status(booking_id, STATUS_COMPLETED, booking.get("checked_in_at"), completed_at, 0)
         get_db().commit()
     except sqlite3.Error:
         get_db().rollback()
         return False, "Vehicle could not be completed right now. Please try again.", booking
+    return True, "", fetch_booking_by_id(booking_id)
+
+
+def mark_whatsapp_sent(booking_id):
+    booking = fetch_booking_by_id(booking_id)
+    if not booking:
+        return False, "Booking not found.", None
+    try:
+        _begin_write_transaction()
+        update_whatsapp_sent(booking_id, 1)
+        get_db().commit()
+    except sqlite3.Error:
+        get_db().rollback()
+        return False, "WhatsApp tracking could not be updated right now.", booking
     return True, "", fetch_booking_by_id(booking_id)

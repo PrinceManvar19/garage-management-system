@@ -363,10 +363,16 @@
             <td>{{ b.date }}</td>
             <td>
               <span class="status-pill {{ booking_status if booking_status in ['pending', 'approved', 'checked_in', 'rejected', 'completed'] else 'other' }}">
-                {{ b.status_display or b.status }}
+                {% if booking_status == 'checked_in' %}
+                  In Progress 🔧
+                {% elif booking_status == 'completed' %}
+                  Completed ✅
+                {% else %}
+                  {{ b.status_display or b.status }}
+                {% endif %}
               </span>
               {% if booking_status == 'checked_in' %}
-              <div class="verify-hint">Vehicle received at garage{% if b.checked_in_at %} on {{ b.checked_in_at }}{% endif %}.</div>
+              <div class="verify-hint">Service is in progress{% if b.checked_in_at %} since {{ b.checked_in_at }}{% endif %}.</div>
               {% elif booking_status == 'completed' %}
               <div class="verify-hint">Service completed{% if b.completed_at %} on {{ b.completed_at }}{% endif %}.</div>
               {% endif %}
@@ -456,13 +462,13 @@
       return 'Approved';
     }
     if (lower === 'checked_in') {
-      return 'Vehicle received at garage';
+      return 'In Progress 🔧';
     }
     if (lower === 'rejected') {
       return 'Rejected';
     }
     if (lower === 'completed') {
-      return 'Service completed';
+      return 'Completed ✅';
     }
     return status;
   }

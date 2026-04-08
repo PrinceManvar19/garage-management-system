@@ -53,7 +53,8 @@ def init_db():
             status TEXT NOT NULL,
             created_at TEXT,
             checked_in_at TEXT,
-            completed_at TEXT
+            completed_at TEXT,
+            whatsapp_sent INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS slots (
@@ -68,6 +69,7 @@ def init_db():
         """
     )
     migrate_slots_table(db)
+    migrate_bookings_table(db)
     seed_admins(db)
     migrate_json_data()
     db.commit()
@@ -124,9 +126,9 @@ def migrate_json_data():
             """
             INSERT OR IGNORE INTO bookings (
                 booking_id, customer_id, name, phone, vehicle, brand_model,
-                service, date, status, created_at, checked_in_at, completed_at
+                service, date, status, created_at, checked_in_at, completed_at, whatsapp_sent
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 booking_id,
@@ -141,6 +143,7 @@ def migrate_json_data():
                 booking.get("created_at", "") or "",
                 booking.get("checked_in_at"),
                 booking.get("completed_at"),
+                int(booking.get("whatsapp_sent", 0) or 0),
             ),
         )
 
@@ -183,6 +186,20 @@ def migrate_slots_table(db):
         DROP TABLE slots_old;
         """
     )
+
+
+def migrate_bookings_table(db):
+    booking_columns = {
+        row["name"]
+        for row in db.execute("PRAGMA table_info(bookings)").fetchall()
+    }
+    if "whatsapp_sent" not in booking_columns:
+        db.execute(
+            """
+            ALTER TABLE bookings
+            ADD COLUMN whatsapp_sent INTEGER NOT NULL DEFAULT 0
+            """
+        )
 
 
 def init_app(app):
