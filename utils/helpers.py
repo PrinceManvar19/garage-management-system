@@ -46,3 +46,17 @@ def parse_datetime(value):
         except ValueError:
             continue
     return None
+
+
+def format_date_display(value):
+    parsed = parse_datetime(value)
+    if not parsed:
+        return value or ""
+    return parsed.strftime("%d-%m-%Y")
+
+
+def format_datetime_display(value):
+    parsed = parse_datetime(value)
+    if not parsed:
+        return value or ""
+    return parsed.strftime("%d-%m-%Y %H:%M")

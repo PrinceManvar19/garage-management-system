@@ -260,37 +260,32 @@
     <div class="verify-book-grid">
       <div class="verify-copy">
         <span class="verify-eyebrow">
-          <i class="fas fa-shield-check"></i>
-          Verify Customer & Book Service
+          <i class="fas fa-calendar-check"></i>
+          Direct Service Booking
         </span>
         <h2 class="verify-title">Book your next service without leaving the dashboard.</h2>
-        <p class="verify-subtitle">Verify your customer ID, choose an available slot, and send your booking request instantly. Your booking history stays right below for easy tracking.</p>
+        <p class="verify-subtitle">Your account details are already linked to this session. Choose your vehicle details, pick an available date, and send your booking request instantly.</p>
       </div>
 
       <div>
-        <div class="verify-step-card">
+        <div id="bookingStepCard" class="booking-step-card" style="margin-top:0;">
           <div class="step-label">1</div>
-          <h3 class="step-title">Verify Customer</h3>
-          <p class="step-copy">Enter your customer ID exactly as shown in your account to unlock the booking form.</p>
-
-          <form id="verifyCustomerForm">
-            <label for="verifyCustomerId" class="form-label fw-bold">Customer ID</label>
-            <input type="text" class="form-control" id="verifyCustomerId" placeholder="CUST1001" required>
-            <button type="submit" class="btn btn-danger w-100 mt-3">
-              <i class="fas fa-badge-check me-2"></i>
-              Verify
-            </button>
-          </form>
-
-          <div id="verifyMessage" class="verify-hint">Logged in as {{ session.user.id }}.</div>
-        </div>
-
-        <div id="bookingStepCard" class="booking-step-card verify-hidden">
-          <div class="step-label">2</div>
           <h3 class="step-title">Complete Booking Form</h3>
-          <p class="step-copy">Choose your vehicle details and preferred service date from the available slots.</p>
+          <p class="step-copy">Your customer details are pre-filled from your login. Choose your vehicle details and preferred service date from the available slots.</p>
 
           <form id="dashboardBookingForm">
+            <input type="hidden" name="customer_id" value="{{ customer.id }}">
+
+            <div class="mb-3">
+              <label for="customerName" class="form-label fw-bold">Name</label>
+              <input type="text" class="form-control" id="customerName" value="{{ customer.name }}" readonly>
+            </div>
+
+            <div class="mb-3">
+              <label for="customerPhone" class="form-label fw-bold">Phone</label>
+              <input type="text" class="form-control" id="customerPhone" name="customer_phone" value="{{ customer.phone or session.get('phone', '') }}" readonly>
+            </div>
+
             <div class="mb-3">
               <label for="vehicleNumber" class="form-label fw-bold">Vehicle Number Plate</label>
               <input type="text" class="form-control" id="vehicleNumber" name="vehicle_number" placeholder="GJ01AB1234" required>
@@ -331,7 +326,7 @@
         </div>
 
         <div id="bookingSuccessCard" class="success-step-card verify-hidden">
-          <div class="step-label" style="background: rgba(34, 197, 94, 0.14); color: #15803d;">3</div>
+          <div class="step-label" style="background: rgba(34, 197, 94, 0.14); color: #15803d;">2</div>
           <h3>Booking request sent successfully.</h3>
           <p id="bookingSuccessText">Your Booking ID is BOOKXXXX. Please wait for confirmation or check WhatsApp or revisit this site in a few hours.</p>
         </div>
@@ -405,10 +400,6 @@
 
 {% block extra_scripts %}
 <script>
-  const loggedInCustomerId = "{{ session.user.id }}";
-  const verifyForm = document.getElementById('verifyCustomerForm');
-  const verifyInput = document.getElementById('verifyCustomerId');
-  const verifyMessage = document.getElementById('verifyMessage');
   const bookingStepCard = document.getElementById('bookingStepCard');
   const bookingForm = document.getElementById('dashboardBookingForm');
   const bookingMessage = document.getElementById('bookingMessage');
@@ -417,11 +408,6 @@
   const emptyBookingsText = document.getElementById('emptyBookingsText');
   const bookingHistoryTable = document.getElementById('bookingHistoryTable');
   const bookingHistoryTableBody = document.getElementById('bookingHistoryTableBody');
-
-  function setVerifyMessage(message, tone) {
-    verifyMessage.textContent = message;
-    verifyMessage.style.color = tone === 'success' ? '#bbf7d0' : tone === 'error' ? '#fecaca' : '#d1d5db';
-  }
 
   function setBookingMessage(message, tone) {
     bookingMessage.textContent = message;
@@ -493,27 +479,6 @@
     bookingHistoryTableBody.insertBefore(row, bookingHistoryTableBody.firstChild);
   }
 
-  verifyForm.addEventListener('submit', function(event) {
-    event.preventDefault();
-    const enteredId = verifyInput.value.trim().toUpperCase();
-
-    if (!enteredId) {
-      setVerifyMessage('Please enter your customer ID to continue.', 'error');
-      bookingStepCard.classList.add('verify-hidden');
-      return;
-    }
-
-    if (enteredId !== loggedInCustomerId) {
-      setVerifyMessage('Customer ID does not match the logged-in account. Please try again.', 'error');
-      bookingStepCard.classList.add('verify-hidden');
-      return;
-    }
-
-    setVerifyMessage('Customer verified successfully. You can now complete your booking form below.', 'success');
-    bookingStepCard.classList.remove('verify-hidden');
-    bookingSuccessCard.classList.add('verify-hidden');
-  });
-
   bookingForm.addEventListener('submit', async function(event) {
     event.preventDefault();
 
@@ -540,7 +505,7 @@
         const fallbackIdMatches = responseText.match(/BOOK\d+/g);
         const bookingId = explicitIdMatch ? explicitIdMatch[1] : (fallbackIdMatches ? fallbackIdMatches[fallbackIdMatches.length - 1] : 'BOOKXXXX');
 
-        bookingSuccessText.textContent = `Your Booking ID is ${bookingId}. Please wait for confirmation or check WhatsApp or revisit this site in a few hours.`;
+        bookingSuccessText.textContent = `Booking request sent successfully. Your Booking ID is ${bookingId}. Please wait for confirmation or check WhatsApp or revisit this site in a few hours.`;
         bookingSuccessCard.classList.remove('verify-hidden');
         setBookingMessage(`Booking created successfully with ID ${bookingId}.`, 'success');
         appendBookingToHistory(bookingId, date, service, 'pending');

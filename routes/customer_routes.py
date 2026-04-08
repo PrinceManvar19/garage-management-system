@@ -33,14 +33,6 @@ def dashboard():
     )
 
 
-@customer_bp.route("/verify-customer", methods=["GET", "POST"])
-def verify_customer():
-    flash("Customer verification flow has been disabled. Please book directly from your dashboard.", "info")
-    if session.get("role") == "customer":
-        return redirect(url_for("customer.dashboard"))
-    return redirect(url_for("customer.book"))
-
-
 @customer_bp.route("/book", methods=["GET", "POST"])
 def book():
     if "customer_id" not in session or session.get("role") != "customer":
@@ -48,13 +40,22 @@ def book():
         return redirect(url_for("auth.login"))
 
     if request.method == "GET":
-        return redirect(url_for("customer.dashboard"))
+        customer = get_customer_by_id(session["customer_id"]) or {
+            "id": session["customer_id"],
+            "name": session["name"],
+            "phone": session.get("phone", ""),
+        }
+        return render_template(
+            "book.html",
+            customer=customer,
+            date_slots=get_next_14_days(),
+        )
 
     vehicle = request.form.get("vehicle_number", "").strip().upper()
     brand_model = request.form.get("brand_model", "").strip()
     service = request.form.get("service", "").strip()
     date = request.form.get("date", "").strip()
-    customer_phone = request.form.get("customer_phone", "").strip()
+    customer_phone = request.form.get("customer_phone", "").strip() or session.get("phone", "").strip()
 
     success, message, booking = create_booking_for_customer(
         session["customer_id"],
@@ -69,5 +70,5 @@ def book():
         flash(message, "danger")
         return redirect(url_for("customer.dashboard"))
 
-    flash(f'Booking confirmed successfully! Booking ID: {booking["booking_id"]}', "success")
+    flash(f'Booking request sent successfully. Your Booking ID is {booking["booking_id"]}', "success")
     return redirect(url_for("customer.dashboard"))

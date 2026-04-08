@@ -1,4 +1,5 @@
 import csv
+from datetime import datetime
 from io import StringIO
 from urllib.parse import quote
 
@@ -18,8 +19,8 @@ from services.booking_service import (
     reject_booking as reject_booking_service,
 )
 from services.slot_service import get_slots_for_admin, set_slot_total
-from utils.constants import STATUS_APPROVED, STATUS_CHECKED_IN, STATUS_COMPLETED, STATUS_REJECTED
-from utils.helpers import get_today_date_string
+from utils.constants import STATUS_APPROVED, STATUS_CHECKED_IN, STATUS_COMPLETED, STATUS_PENDING, STATUS_REJECTED
+from utils.helpers import format_date_display, format_datetime_display, get_today_date_string
 
 
 admin_bp = Blueprint("admin", __name__)
@@ -31,7 +32,9 @@ def _require_admin():
 
 def _build_whatsapp_message(booking):
     status_labels = {
+        STATUS_PENDING: "Pending",
         STATUS_APPROVED: "Approved",
+        STATUS_CHECKED_IN: "Checked-In",
         STATUS_REJECTED: "Rejected",
         STATUS_COMPLETED: "Completed",
     }
@@ -49,7 +52,7 @@ def _build_whatsapp_message(booking):
 
 def _csv_response(filename, headers, rows):
     output = StringIO()
-    writer = csv.writer(output)
+    writer = csv.writer(output, quoting=csv.QUOTE_ALL)
     writer.writerow(headers)
     writer.writerows(rows)
     return Response(
@@ -59,12 +62,28 @@ def _csv_response(filename, headers, rows):
     )
 
 
-@admin_bp.route("/admin")
-def admin_dashboard():
-    if not _require_admin():
-        return redirect(url_for("main.home"))
+def _normalize_csv_value(value):
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.strftime("%d-%m-%Y %H:%M")
+    return str(value)
 
-    filters = {
+
+def _format_csv_date(value):
+    return _normalize_csv_value(format_date_display(value))
+
+
+def _format_csv_datetime(value):
+    return _normalize_csv_value(format_datetime_display(value))
+
+
+def _render_admin_dashboard(
+    filters=None,
+    booking_data=None,
+    checkin_booking_id="",
+):
+    filters = filters or {
         "query": request.args.get("query", ""),
         "date": request.args.get("date", ""),
         "status": request.args.get("status", ""),
@@ -74,18 +93,18 @@ def admin_dashboard():
     bookings = get_admin_bookings(filters)
     stats = get_booking_stats(all_bookings)
     vehicles_in_garage = [booking for booking in all_bookings if booking.get("status") == STATUS_CHECKED_IN]
-    checkin_booking_id = request.args.get("checkin_booking_id", "").strip().upper()
-    verified_checkin_booking = None
-
-    if checkin_booking_id:
-        verified_checkin_booking = get_booking_by_id(checkin_booking_id)
-        if not verified_checkin_booking:
-            flash("Booking not found", "danger")
+    slots = {
+        date: {
+            **slot,
+            "formatted_date": format_date_display(date),
+        }
+        for date, slot in get_slots_for_admin().items()
+    }
 
     return render_template(
         "admin.html",
         bookings=bookings,
-        slots=get_slots_for_admin(),
+        slots=slots,
         vehicles_in_garage=vehicles_in_garage,
         total_bookings=stats["total"],
         pending_count=stats["pending"],
@@ -94,9 +113,27 @@ def admin_dashboard():
         rejected_count=stats["rejected"],
         filters=filters,
         today=today,
-        verified_checkin_booking=verified_checkin_booking,
+        today_display=format_date_display(today),
+        verified_checkin_booking=booking_data,
+        booking_data=booking_data,
         checkin_booking_id=checkin_booking_id,
     )
+
+
+@admin_bp.route("/admin")
+def admin_dashboard():
+    if not _require_admin():
+        return redirect(url_for("main.home"))
+
+    checkin_booking_id = request.args.get("checkin_booking_id", "").strip().upper()
+    booking_data = None
+
+    if checkin_booking_id:
+        booking_data = get_booking_by_id(checkin_booking_id)
+        if not booking_data:
+            flash("Booking not found", "danger")
+
+    return _render_admin_dashboard(booking_data=booking_data, checkin_booking_id=checkin_booking_id)
 
 
 @admin_bp.route("/admin/checkin/verify", methods=["POST"])
@@ -107,9 +144,18 @@ def verify_checkin_booking():
     booking_id = request.form.get("booking_id", "").strip().upper()
     if not booking_id:
         flash("Booking ID is required", "danger")
-        return redirect(url_for("admin.admin_dashboard"))
+        return _render_admin_dashboard()
 
-    return redirect(url_for("admin.admin_dashboard", checkin_booking_id=booking_id))
+    booking_data = get_booking_by_id(booking_id)
+    if not booking_data:
+        flash("Booking not found", "danger")
+
+    filters = {
+        "query": request.args.get("query", ""),
+        "date": request.args.get("date", ""),
+        "status": request.args.get("status", ""),
+    }
+    return _render_admin_dashboard(filters=filters, booking_data=booking_data, checkin_booking_id=booking_id)
 
 
 @admin_bp.route("/export/bookings")
@@ -120,15 +166,15 @@ def export_bookings():
     bookings = get_admin_bookings()
     rows = [
         [
-            booking.get("booking_id", ""),
-            booking.get("customer_id", ""),
-            booking.get("name", ""),
-            booking.get("phone", ""),
-            booking.get("vehicle", ""),
-            booking.get("service", ""),
-            booking.get("date", ""),
-            booking.get("status", ""),
-            booking.get("created_at", ""),
+            _normalize_csv_value(booking.get("booking_id", "")),
+            _normalize_csv_value(booking.get("customer_id", "")),
+            _normalize_csv_value(booking.get("name", "")),
+            _normalize_csv_value(booking.get("phone", "")),
+            _normalize_csv_value(booking.get("vehicle", "")),
+            _normalize_csv_value(booking.get("service", "")),
+            _format_csv_date(booking.get("date", "")),
+            _normalize_csv_value(booking.get("status", "")),
+            _format_csv_datetime(booking.get("created_at", "")),
         ]
         for booking in bookings
     ]
@@ -147,13 +193,13 @@ def export_garage():
     bookings = [booking for booking in get_admin_bookings() if booking.get("status") == STATUS_CHECKED_IN]
     rows = [
         [
-            booking.get("booking_id", ""),
-            booking.get("name", ""),
-            booking.get("phone", ""),
-            booking.get("vehicle", ""),
-            booking.get("service", ""),
-            booking.get("date", ""),
-            booking.get("checked_in_at", ""),
+            _normalize_csv_value(booking.get("booking_id", "")),
+            _normalize_csv_value(booking.get("name", "")),
+            _normalize_csv_value(booking.get("phone", "")),
+            _normalize_csv_value(booking.get("vehicle", "")),
+            _normalize_csv_value(booking.get("service", "")),
+            _format_csv_date(booking.get("date", "")),
+            _format_csv_datetime(booking.get("checked_in_at", "")),
         ]
         for booking in bookings
     ]
@@ -228,9 +274,10 @@ def admin_checkin_booking(booking_id):
     if not _require_admin():
         return redirect(url_for("main.home"))
 
-    success, message, _booking = checkin_vehicle(booking_id, get_today_date_string())
+    success, message, booking = checkin_vehicle(booking_id, get_today_date_string())
     flash(message if not success else "Vehicle checked-in successfully", "danger" if not success else "success")
-    return redirect(url_for("admin.admin_dashboard"))
+    booking_data = get_booking_by_id(booking_id) if success else (enrich_booking(booking) if booking else None)
+    return _render_admin_dashboard(booking_data=booking_data, checkin_booking_id=booking_id)
 
 
 @admin_bp.route("/admin/whatsapp/<booking_id>")
@@ -243,8 +290,8 @@ def send_booking_whatsapp(booking_id):
         flash("Booking not found", "danger")
         return redirect(url_for("admin.admin_dashboard"))
 
-    if booking.get("status") not in {STATUS_APPROVED, STATUS_REJECTED, STATUS_COMPLETED}:
-        flash("WhatsApp is available only for approved, rejected, or completed bookings", "danger")
+    if booking.get("status") not in {STATUS_PENDING, STATUS_APPROVED, STATUS_CHECKED_IN, STATUS_REJECTED, STATUS_COMPLETED}:
+        flash("WhatsApp is not available for this booking", "danger")
         return redirect(url_for("admin.admin_dashboard"))
 
     phone = normalize_phone(booking.get("phone", ""))
@@ -323,6 +370,7 @@ def checkin():
     return render_template(
         "checkin.html",
         today=today,
+        today_display=format_date_display(today),
         verified_booking=verified_booking,
         vehicles_in_garage=vehicles_in_garage,
     )

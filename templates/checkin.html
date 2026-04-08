@@ -16,7 +16,7 @@
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.5rem;align-items:start;">
     <div class="dash-card">
       <h2 class="dash-card-title"><i class="fas fa-id-card"></i> Verify Booking</h2>
-      <p class="dash-sub">Today's date: {{ today }}</p>
+      <p class="dash-sub">Today's date: {{ today_display or today }}</p>
 
       <form method="POST" action="/checkin" class="dash-form">
         <input type="hidden" name="action" value="verify_booking" />
@@ -39,7 +39,7 @@
           <div><strong>Vehicle Number:</strong> {{ verified_booking.vehicle }}</div>
           <div><strong>Brand/Model:</strong> {{ verified_booking.brand_model or '-' }}</div>
           <div><strong>Service Type:</strong> {{ verified_booking.service }}</div>
-          <div><strong>Booking Date:</strong> {{ verified_booking.date }}</div>
+          <div><strong>Booking Date:</strong> {{ verified_booking.formatted_date or verified_booking.date }}</div>
           <div><strong>Status:</strong> {{ verified_booking.status_display or verified_booking.status }}</div>
         </div>
 
@@ -51,7 +51,9 @@
                   class="dash-btn-primary"
                   data-whatsapp-trigger="true"
                   data-booking-id="{{ verified_booking.booking_id }}"
-                  data-action="checked_in">
+                  data-action="checked_in"
+                  data-loading-submit="true"
+                  data-loading-text="Checking In...">
             <i class="fas fa-check-circle"></i> Check-In Vehicle
           </button>
         </form>
@@ -74,6 +76,8 @@
              data-whatsapp-button="true"
              data-booking-id="{{ booking.booking_id }}"
              data-action="checked_in"
+             data-loading-text="Sending..."
+             data-toast-message="WhatsApp opened"
              style="display:none;margin-top:1rem;"
              href="https://wa.me/{{ '91' ~ booking.phone }}?text={{ message }}">
             WhatsApp
@@ -149,7 +153,7 @@
                 {% if b.brand_model %}<small>{{ b.brand_model }}</small>{% endif %}
               </td>
               <td>{{ b.service }}</td>
-              <td>{{ b.checked_in_at or '-' }}</td>
+              <td>{{ b.formatted_checked_in_at or b.checked_in_at or '-' }}</td>
             </tr>
             {% endfor %}
           {% else %}

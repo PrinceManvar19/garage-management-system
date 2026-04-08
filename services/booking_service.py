@@ -22,7 +22,13 @@ from utils.constants import (
     STATUS_PENDING,
     STATUS_REJECTED,
 )
-from utils.helpers import get_status_display, parse_datetime, sort_bookings_newest_first
+from utils.helpers import (
+    format_date_display,
+    format_datetime_display,
+    get_status_display,
+    parse_datetime,
+    sort_bookings_newest_first,
+)
 
 
 PHONE_PATTERN = re.compile(r"^\d{10}$")
@@ -35,6 +41,10 @@ def enrich_booking(booking, customer_map=None):
     if not enriched.get("phone"):
         enriched["phone"] = customer.get("phone", "")
     enriched["status_display"] = get_status_display(enriched.get("status"))
+    enriched["formatted_date"] = format_date_display(enriched.get("date"))
+    enriched["formatted_created_at"] = format_datetime_display(enriched.get("created_at"))
+    enriched["formatted_checked_in_at"] = format_datetime_display(enriched.get("checked_in_at"))
+    enriched["formatted_completed_at"] = format_datetime_display(enriched.get("completed_at"))
     return enriched
 
 

@@ -13,7 +13,7 @@ def login():
         user = login_user_by_id(request.form.get("customer_id", ""))
         if user:
             session.clear()
-            set_user_session(user["id"], user["name"], user["role"])
+            set_user_session(user["id"], user["name"], user["role"], user.get("phone", ""))
             flash(f'{user["role"].title()} login successful!', "success")
             endpoint = "admin.admin_dashboard" if user["role"] == "admin" else "customer.dashboard"
             return redirect(url_for(endpoint))
