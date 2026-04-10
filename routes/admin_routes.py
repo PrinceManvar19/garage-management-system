@@ -108,6 +108,11 @@ def _render_admin_dashboard(
     today_pending = [booking for booking in today_bookings if booking.get("status") == STATUS_PENDING]
     today_completed = [booking for booking in today_bookings if booking.get("status") == STATUS_COMPLETED]
     today_in_garage = [booking for booking in today_bookings if booking.get("status") == STATUS_IN_GARAGE]
+    if whatsapp_booking:
+        is_completed = whatsapp_booking.get("status") == STATUS_COMPLETED
+        is_unsent = int(whatsapp_booking.get("whatsapp_sent") or 0) == 0
+        if not (is_completed and is_unsent):
+            whatsapp_booking = None
     slots = {
         date: {
             **slot,
@@ -287,7 +292,7 @@ def approve_booking(booking_id):
         return redirect(url_for("admin.admin_dashboard"))
 
     flash("Booking Approved", "success")
-    return redirect(url_for("admin.admin_dashboard", whatsapp_booking_id=booking_id))
+    return redirect(url_for("admin.admin_dashboard"))
 
 
 @admin_bp.route("/admin/reject/<booking_id>")

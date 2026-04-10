@@ -60,19 +60,6 @@
       <div><strong>Completed:</strong> {{ today_completed_count }}</div>
       <div><strong>Pending:</strong> {{ today_pending_count }}</div>
     </div>
-    {% if whatsapp_booking and whatsapp_booking.phone %}
-      <div class="dash-alert dash-alert-success admin-followup-alert">
-        <span>Quick follow-up ready for {{ whatsapp_booking.name }} ({{ whatsapp_booking.booking_id }})</span>
-        <a href="/admin/whatsapp/{{ whatsapp_booking.booking_id }}"
-           target="_blank"
-           rel="noopener"
-           class="btn btn-success btn-sm"
-           data-loading-text="Opening..."
-           data-toast-message="WhatsApp opened">
-          Send WhatsApp
-        </a>
-      </div>
-    {% endif %}
   </div>
 
   <div class="dash-card admin-section-card">
@@ -211,15 +198,17 @@
                   "Your vehicle service is completed. You may collect your vehicle.\n\n" ~
                   "Thank you - Shreeji Auto Services"
                   %}
-                  <a target="_blank"
-                     class="btn btn-success btn-sm"
-                     data-whatsapp-button="true"
-                     data-booking-id="{{ booking.booking_id }}"
-                     data-action="completed"
-                     style="display:none;"
-                     href="https://wa.me/{{ '91' ~ booking.phone }}?text={{ message|urlencode }}">
-                    Send WhatsApp
-                  </a>
+                  {% if not booking.whatsapp_sent %}
+                    <a target="_blank"
+                       class="btn btn-success btn-sm"
+                       data-whatsapp-button="true"
+                       data-booking-id="{{ booking.booking_id }}"
+                       data-action="completed"
+                       style="display:none;"
+                       href="https://wa.me/{{ '91' ~ booking.phone }}?text={{ message|urlencode }}">
+                      Send WhatsApp
+                    </a>
+                  {% endif %}
                 {% endif %}
                 <a href="/admin/complete/{{ b.booking_id }}"
                    class="btn btn-primary btn-sm btn-complete-soft"
@@ -301,16 +290,17 @@
       </a>
     </div>
 
-    <div class="admin-quick-filters">
-      <button type="button" class="admin-quick-filter quick-filter-chip active" data-filter="all" onclick="setFilter('all')">All</button>
-      <button type="button" class="admin-quick-filter quick-filter-chip" data-filter="today" onclick="setFilter('today')">Today</button>
-      <button type="button" class="admin-quick-filter quick-filter-chip" data-filter="pending" onclick="setFilter('pending')">Pending</button>
-      <button type="button" class="admin-quick-filter quick-filter-chip" data-filter="approved" onclick="setFilter('approved')">Approved</button>
-      <button type="button" class="admin-quick-filter quick-filter-chip" data-filter="in_garage" onclick="setFilter('in_garage')">In Garage</button>
-    </div>
+    <div class="admin-filter-panel">
+      <div class="admin-quick-filters">
+        <button type="button" class="admin-quick-filter quick-filter-chip active" data-filter="all" onclick="setFilter('all')">All</button>
+        <button type="button" class="admin-quick-filter quick-filter-chip" data-filter="today" onclick="setFilter('today')">Today</button>
+        <button type="button" class="admin-quick-filter quick-filter-chip" data-filter="pending" onclick="setFilter('pending')">Pending</button>
+        <button type="button" class="admin-quick-filter quick-filter-chip" data-filter="approved" onclick="setFilter('approved')">Approved</button>
+        <button type="button" class="admin-quick-filter quick-filter-chip" data-filter="in_garage" onclick="setFilter('in_garage')">In Garage</button>
+      </div>
 
-    <form method="GET" action="/admin" class="dash-form" style="margin-bottom:1.25rem;">
-      <div class="dash-form-row" style="align-items:flex-end;">
+      <form method="GET" action="/admin" class="dash-form admin-filter-form" style="margin-bottom:1.25rem;">
+        <div class="dash-form-row" style="align-items:flex-end;">
         <div class="dash-form-group">
           <label>Search</label>
           <input type="text" name="query" value="{{ filters.query if filters else '' }}" placeholder="Search by Booking ID / Phone / Vehicle" autofocus />
@@ -339,8 +329,9 @@
             <i class="fas fa-rotate-left"></i> Reset
           </a>
         </div>
-      </div>
-    </form>
+        </div>
+      </form>
+    </div>
 
     <div class="table-responsive dash-table-wrap">
       <table class="dash-table">
@@ -417,16 +408,20 @@
               <td class="action-col">
                 <div class="whatsapp-cell">
                   {% if b.phone %}
-                    <a href="/admin/whatsapp/{{ b.booking_id }}"
-                       target="_blank"
-                       rel="noopener"
-                       class="btn btn-sm action-btn-compact {% if b.whatsapp_sent %}btn-outline-primary{% else %}btn-success{% endif %}"
-                       data-loading-text="Sending..."
-                       data-toast-message="Message sent"
-                       title="Send or resend WhatsApp message"
-                       aria-label="Send or resend WhatsApp message">
-                      {% if b.whatsapp_sent %}Re-send{% else %}Send{% endif %}
-                    </a>
+                    {% if b.whatsapp_sent %}
+                      <span class="status-badge status-approved">Sent</span>
+                    {% else %}
+                      <a href="/admin/whatsapp/{{ b.booking_id }}"
+                         target="_blank"
+                         rel="noopener"
+                         class="btn btn-sm action-btn-compact btn-success"
+                         data-loading-text="Sending..."
+                         data-toast-message="Message sent"
+                         title="Send WhatsApp message"
+                         aria-label="Send WhatsApp message">
+                        Send
+                      </a>
+                    {% endif %}
                   {% else %}
                     <span class="dash-sub">-</span>
                   {% endif %}

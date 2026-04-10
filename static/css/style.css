@@ -1362,7 +1362,7 @@ a  { text-decoration: none; color: inherit; }
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at top right, rgba(162,4,5,0.12), transparent 30%),
+    radial-gradient(circle at top right, rgba(162,4,5,0.06), transparent 30%),
     radial-gradient(circle at top left, rgba(255,255,255,0.04), transparent 22%),
     linear-gradient(180deg, #14161d 0%, #111319 100%);
   z-index: -1;
@@ -1470,24 +1470,24 @@ a  { text-decoration: none; color: inherit; }
 .admin-dashboard .dash-btn-secondary {
   color: #e2e8f0;
   background: rgba(15, 23, 42, 0.7);
-  border-color: rgba(148, 163, 184, 0.2);
-  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.18);
+  border-color: #2a2a2a;
+  box-shadow: 0 8px 18px rgba(2, 6, 23, 0.14);
 }
 
 .admin-dashboard .dash-btn-secondary:hover {
   color: #fff;
-  border-color: rgba(162, 4, 5, 0.45);
-  background: rgba(162, 4, 5, 0.16);
+  border-color: #3a3a3a;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .admin-dashboard .dash-logout {
   color: #fecaca;
-  background: rgba(127, 29, 29, 0.25);
-  border-color: rgba(248, 113, 113, 0.28);
+  background: rgba(127, 29, 29, 0.14);
+  border-color: #2a2a2a;
 }
 
 .admin-dashboard .dash-logout:hover {
-  background: rgba(153, 27, 27, 0.35);
+  background: rgba(153, 27, 27, 0.22);
   color: #fff;
 }
 
@@ -1501,8 +1501,8 @@ a  { text-decoration: none; color: inherit; }
 
 .admin-dashboard .dash-card {
   background: linear-gradient(180deg, rgba(20, 24, 34, 0.96) 0%, rgba(14, 18, 26, 0.98) 100%);
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  box-shadow: 0 20px 45px rgba(2, 6, 23, 0.36);
+  border: 1px solid #2a2a2a;
+  box-shadow: 0 14px 28px rgba(2, 6, 23, 0.24);
   padding: 1.5rem;
 }
 
@@ -1517,12 +1517,12 @@ a  { text-decoration: none; color: inherit; }
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
 .admin-priority-card {
-  border-color: rgba(162, 4, 5, 0.3) !important;
-  box-shadow: 0 18px 42px rgba(2, 6, 23, 0.42), 0 0 0 1px rgba(162, 4, 5, 0.12), 0 0 22px rgba(162, 4, 5, 0.14);
+  border-color: #343434 !important;
+  box-shadow: 0 16px 30px rgba(2, 6, 23, 0.26);
 }
 
 .dash-card-title {
@@ -1587,31 +1587,31 @@ a  { text-decoration: none; color: inherit; }
 .admin-dashboard .btn-outline-primary {
   border-radius: 12px;
   border: 1px solid transparent;
-  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.22);
+  box-shadow: 0 8px 18px rgba(2, 6, 23, 0.16);
   transition: transform var(--transition), box-shadow var(--transition), background var(--transition), border-color var(--transition), color var(--transition);
 }
 
 .admin-dashboard .btn-primary,
 .admin-dashboard .btn-export,
 .admin-dashboard .dash-btn-primary {
-  background: linear-gradient(135deg, #c10a0c 0%, #8f0305 100%);
+  background: linear-gradient(135deg, #b40b0d 0%, #8d0a0c 100%);
   color: #fff;
-  border-color: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.04);
 }
 
 .admin-dashboard .btn-primary:hover,
 .admin-dashboard .btn-export:hover,
 .admin-dashboard .dash-btn-primary:hover {
-  background: linear-gradient(135deg, #d01113 0%, #7a0304 100%);
+  background: linear-gradient(135deg, #c20d10 0%, #841012 100%);
   color: #fff;
   transform: translateY(-1px);
-  box-shadow: 0 14px 28px rgba(122, 3, 4, 0.35);
+  box-shadow: 0 10px 20px rgba(122, 3, 4, 0.2);
 }
 
 .admin-dashboard .btn-secondary {
   background: rgba(51, 65, 85, 0.9);
   color: #f8fafc;
-  border-color: rgba(148, 163, 184, 0.18);
+  border-color: #2a2a2a;
 }
 
 .admin-dashboard .btn-secondary:hover {
@@ -1623,7 +1623,7 @@ a  { text-decoration: none; color: inherit; }
 .admin-dashboard .btn-outline-primary {
   background: transparent;
   color: #cbd5e1;
-  border-color: rgba(148, 163, 184, 0.24);
+  border-color: #2a2a2a;
 }
 
 .admin-dashboard .btn-outline:hover,
@@ -1635,7 +1635,7 @@ a  { text-decoration: none; color: inherit; }
 .admin-dashboard .btn-success {
   background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
   color: #fff;
-  border-color: rgba(74, 222, 128, 0.18);
+  border-color: rgba(74, 222, 128, 0.14);
 }
 
 .admin-dashboard .btn-success:hover {
@@ -1645,8 +1645,8 @@ a  { text-decoration: none; color: inherit; }
 
 .admin-dashboard .btn-outline-primary {
   color: #86efac;
-  border-color: rgba(74, 222, 128, 0.28);
-  background: rgba(21, 128, 61, 0.08);
+  border-color: rgba(74, 222, 128, 0.18);
+  background: rgba(21, 128, 61, 0.04);
 }
 
 .admin-dashboard .btn-outline-primary:hover {
@@ -1719,7 +1719,7 @@ input:focus {
 .admin-dashboard input {
   color: #f8fafc !important;
   background: rgba(15, 23, 42, 0.78) !important;
-  border-color: rgba(148, 163, 184, 0.18);
+  border-color: #2a2a2a;
 }
 
 .admin-dashboard .form-control::placeholder,
@@ -1733,16 +1733,16 @@ input:focus {
 .admin-dashboard .dash-form-group select:focus {
   color: #fff !important;
   background: rgba(15, 23, 42, 0.92) !important;
-  border-color: rgba(162, 4, 5, 0.8);
-  box-shadow: 0 0 0 3px rgba(162, 4, 5, 0.18);
+  border-color: #525252;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.04);
 }
 
 .admin-dashboard .dash-card .dash-form-group input[name="booking_id"] {
   min-height: 52px;
   font-weight: 700;
   letter-spacing: 0.06em;
-  border-color: rgba(162, 4, 5, 0.34);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  border-color: #3a3a3a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
 .dash-btn-primary {
@@ -1805,7 +1805,7 @@ input:focus {
 
 .admin-dashboard .dash-table-wrap {
   margin-top: 0.4rem;
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border: 1px solid #2a2a2a;
   border-radius: 18px;
   background: rgba(15, 23, 42, 0.58);
   overflow: hidden;
@@ -1846,9 +1846,9 @@ input:focus {
 }
 
 .admin-dashboard .dash-table th {
-  background: rgba(10, 14, 22, 0.96);
+  background: rgba(18, 22, 30, 0.98);
   color: #94a3b8;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  border-bottom: 1px solid #2a2a2a;
   padding: 0.95rem 1rem;
 }
 
@@ -1865,7 +1865,7 @@ input:focus {
 
 .admin-dashboard .dash-table td {
   padding: 0.95rem 1rem;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  border-bottom: 1px solid rgba(42, 42, 42, 0.9);
   color: #e2e8f0;
 }
 
@@ -1880,11 +1880,11 @@ input:focus {
 }
 
 .admin-dashboard .dash-table tbody tr:nth-child(even) {
-  background: rgba(255, 255, 255, 0.018);
+  background: rgba(255, 255, 255, 0.022);
 }
 
 .admin-dashboard .dash-table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.035);
+  background: rgba(255, 255, 255, 0.042);
 }
 
 .booking-request-row-active {
@@ -1893,7 +1893,7 @@ input:focus {
 }
 
 .admin-dashboard .booking-request-row-active {
-  background: rgba(162, 4, 5, 0.16) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
 }
 
 .dash-empty {
@@ -1920,7 +1920,7 @@ input:focus {
 
 .admin-dashboard .status-badge {
   padding: 0.38rem 0.8rem;
-  border: 1px solid transparent;
+  border: 1px solid rgba(255,255,255,0.04);
   font-weight: 700;
   letter-spacing: 0.01em;
 }
@@ -1932,33 +1932,45 @@ input:focus {
 .status-completed  { background: rgba(107,114,128,0.14); color: #4b5563; }
 
 .admin-dashboard .status-pending {
-  background: rgba(245, 158, 11, 0.16);
+  background: rgba(245, 158, 11, 0.12);
   color: #fbbf24;
-  border-color: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.12);
 }
 
 .admin-dashboard .status-approved {
-  background: rgba(16, 185, 129, 0.16);
+  background: rgba(16, 185, 129, 0.12);
   color: #34d399;
-  border-color: rgba(16, 185, 129, 0.18);
+  border-color: rgba(16, 185, 129, 0.12);
 }
 
 .admin-dashboard .status-in_service {
-  background: rgba(59, 130, 246, 0.16);
+  background: rgba(59, 130, 246, 0.12);
   color: #60a5fa;
-  border-color: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.12);
 }
 
 .admin-dashboard .status-completed {
-  background: rgba(148, 163, 184, 0.16);
+  background: rgba(148, 163, 184, 0.12);
   color: #cbd5e1;
-  border-color: rgba(148, 163, 184, 0.18);
+  border-color: rgba(148, 163, 184, 0.12);
 }
 
 .admin-dashboard .status-rejected {
-  background: rgba(239, 68, 68, 0.16);
+  background: rgba(239, 68, 68, 0.12);
   color: #fca5a5;
-  border-color: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.12);
+}
+
+.admin-filter-panel {
+  padding: 1rem;
+  border: 1px solid #2a2a2a;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+}
+
+.admin-filter-form {
+  margin-bottom: 0 !important;
 }
 
 .admin-quick-filters {
@@ -1985,7 +1997,7 @@ input:focus {
 
 .admin-dashboard .quick-filter-chip {
   background: rgba(15, 23, 42, 0.75);
-  border-color: rgba(148, 163, 184, 0.14);
+  border-color: #2a2a2a;
   color: #cbd5e1;
   min-height: 40px;
 }
@@ -1999,10 +2011,10 @@ input:focus {
 
 .admin-dashboard .quick-filter-chip:hover,
 .admin-dashboard .quick-filter-chip.active {
-  background: rgba(162, 4, 5, 0.18);
-  border-color: rgba(162, 4, 5, 0.38);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: #3a3a3a;
   color: #fff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 10px 22px rgba(122, 3, 4, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .admin-quick-filter {
@@ -2011,15 +2023,16 @@ input:focus {
 
 .slot-badge {
   display: inline-block;
-  background: rgba(162,4,5,0.1);
-  color: var(--accent);
+  background: rgba(255,255,255,0.06);
+  color: #e2e8f0;
   font-weight: 700;
   font-size: 0.85rem;
-  padding: 0.2rem 0.6rem;
-  border-radius: 6px;
+  padding: 0.28rem 0.72rem;
+  border-radius: 999px;
+  border: 1px solid #2a2a2a;
 }
 
-.slot-full { background: rgba(239,68,68,0.1); color: #dc2626; }
+.slot-full { background: rgba(239,68,68,0.1); color: #fca5a5; border-color: rgba(239,68,68,0.16); }
 
 .pay-badge {
   display: inline-block;
@@ -2040,6 +2053,10 @@ input:focus {
   justify-content: center;
 }
 
+.admin-dashboard .whatsapp-cell {
+  justify-content: flex-end;
+}
+
 .action-col {
   text-align: center;
   vertical-align: middle;
@@ -2047,6 +2064,7 @@ input:focus {
 
 .admin-dashboard .action-col {
   min-width: 110px;
+  text-align: right;
 }
 
 .action-btn-compact {
@@ -2063,31 +2081,31 @@ input:focus {
 .action-meta-time {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   min-height: 36px;
   padding: 0.28rem 0.6rem;
   border-radius: 10px;
   background: rgba(15, 23, 42, 0.62);
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border: 1px solid #2a2a2a;
   color: #94a3b8;
   font-size: 0.72rem;
   font-weight: 600;
   line-height: 1.3;
-  text-align: center;
+  text-align: right;
 }
 
 .btn-complete-soft {
   min-width: 112px;
   padding: 0.46rem 0.82rem !important;
   font-size: 0.74rem !important;
-  background: rgba(162, 4, 5, 0.12) !important;
-  border-color: rgba(162, 4, 5, 0.18) !important;
-  color: #fecaca !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-color: #2a2a2a !important;
+  color: #f8fafc !important;
   box-shadow: none !important;
 }
 
 .btn-complete-soft:hover {
-  background: rgba(162, 4, 5, 0.22) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
   color: #fff !important;
   transform: translateY(-1px);
 }
@@ -2161,8 +2179,8 @@ input:focus {
 
 .admin-dashboard .admin-stat-card {
   background: linear-gradient(180deg, rgba(20, 24, 34, 0.96) 0%, rgba(14, 18, 26, 0.98) 100%);
-  border-color: rgba(148, 163, 184, 0.12);
-  box-shadow: 0 18px 36px rgba(2, 6, 23, 0.3);
+  border-color: #2a2a2a;
+  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.2);
   padding: 1.4rem 1rem;
   position: relative;
   overflow: hidden;
@@ -2175,6 +2193,9 @@ input:focus {
 
 .admin-dashboard .admin-stat-label {
   color: #94a3b8;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .admin-dashboard .admin-stat-card::before {
@@ -2182,12 +2203,12 @@ input:focus {
   position: absolute;
   inset: 0 0 auto 0;
   height: 3px;
-  background: linear-gradient(90deg, rgba(255,255,255,0.15), rgba(162,4,5,0.8), rgba(255,255,255,0.08));
+  background: linear-gradient(90deg, rgba(255,255,255,0.08), rgba(255,255,255,0.14), rgba(255,255,255,0.04));
 }
 
 .admin-dashboard .admin-stat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 24px 42px rgba(2, 6, 23, 0.38);
+  transform: translateY(-2px);
+  box-shadow: 0 16px 28px rgba(2, 6, 23, 0.24);
 }
 
 .admin-dashboard .admin-stat-card i,
@@ -2196,7 +2217,12 @@ input:focus {
 .admin-dashboard .admin-stat-card.info i,
 .admin-dashboard .admin-stat-card.done i {
   color: #f8fafc;
-  opacity: 0.92;
+  opacity: 0.72;
+}
+
+.admin-dashboard .admin-stat-num {
+  font-size: 2.3rem;
+  line-height: 1;
 }
 
 .checkin-result {
@@ -2226,8 +2252,8 @@ input:focus {
 
 .admin-dashboard .checkin-booking-card {
   background: linear-gradient(180deg, rgba(11, 15, 24, 0.92) 0%, rgba(18, 24, 34, 0.9) 100%);
-  border-color: rgba(162, 4, 5, 0.2);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+  border-color: #2a2a2a;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
 }
 
 .checkin-booking-grid {
@@ -2246,7 +2272,7 @@ input:focus {
   padding: 0.95rem 1rem;
   border-radius: 14px;
   background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border: 1px solid #2a2a2a;
 }
 
 .admin-card-subtitle {
@@ -2267,7 +2293,7 @@ input:focus {
 
 .admin-dashboard .dash-alert-success {
   background: rgba(21, 128, 61, 0.16);
-  border-color: rgba(34, 197, 94, 0.24);
+  border-color: #2a2a2a;
   color: #dcfce7;
 }
 
@@ -2302,8 +2328,8 @@ body.modal-open {
 
 .admin-dashboard .booking-modal {
   background: linear-gradient(180deg, #171b24 0%, #12161e 100%);
-  border-color: rgba(148, 163, 184, 0.12);
-  box-shadow: 0 28px 64px rgba(2, 6, 23, 0.55);
+  border-color: #2a2a2a;
+  box-shadow: 0 18px 36px rgba(2, 6, 23, 0.28);
 }
 
 .booking-modal-header {
@@ -2316,7 +2342,7 @@ body.modal-open {
 }
 
 .admin-dashboard .booking-modal-header {
-  border-bottom-color: rgba(148, 163, 184, 0.12);
+  border-bottom-color: #2a2a2a;
 }
 
 .booking-modal-title {
@@ -2358,7 +2384,7 @@ body.modal-open {
 .admin-dashboard .booking-modal-close {
   background: rgba(15, 23, 42, 0.84);
   color: #cbd5e1;
-  border-color: rgba(148, 163, 184, 0.12);
+  border-color: #2a2a2a;
 }
 
 .booking-modal-close:hover {
