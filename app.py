@@ -8,12 +8,20 @@ from routes.auth_routes import auth_bp
 from routes.customer_routes import customer_bp
 from routes.main_routes import main_bp
 from services.auth_service import ensure_session_user
+from utils.system_safety import backup_database, configure_app_logging, log_error, log_info
 
 
 def create_app():
     app = Flask(__name__)
     app.secret_key = "shreeji-auto-key-2025"
     app.config["DATABASE"] = os.path.join(app.root_path, "garage.db")
+    configure_app_logging(app.root_path)
+
+    try:
+        backup_database(app.config["DATABASE"])
+        log_info("Database backup created successfully.")
+    except OSError as error:
+        log_error(f"Database backup failed: {error}")
 
     init_db_app(app)
 

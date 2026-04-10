@@ -17,8 +17,9 @@ from models.db import get_db
 from services.slot_service import get_slot_availability
 from utils.constants import (
     STATUS_APPROVED,
-    STATUS_CHECKED_IN,
     STATUS_COMPLETED,
+    STATUS_IN_GARAGE,
+    STATUS_NO_SHOW,
     STATUS_PENDING,
     STATUS_REJECTED,
 )
@@ -29,9 +30,11 @@ from utils.helpers import (
     parse_datetime,
     sort_bookings_newest_first,
 )
+from utils.system_safety import log_error, log_info
 
 
 PHONE_PATTERN = re.compile(r"^\d{10}$")
+VEHICLE_PATTERN = re.compile(r"^[A-Z0-9-]{6,15}$")
 
 
 def enrich_booking(booking, customer_map=None):
@@ -117,6 +120,11 @@ def _validate_phone(phone):
     return bool(PHONE_PATTERN.fullmatch(normalize_phone(phone)))
 
 
+def _validate_vehicle(vehicle):
+    normalized_vehicle = (vehicle or "").strip().upper()
+    return bool(VEHICLE_PATTERN.fullmatch(normalized_vehicle))
+
+
 def _begin_write_transaction():
     get_db().execute("BEGIN IMMEDIATE")
 
@@ -124,8 +132,12 @@ def _begin_write_transaction():
 def _validate_booking_input(customer_id, phone, vehicle, service, date):
     if not vehicle:
         return False, "Vehicle number is required."
+    if not _validate_vehicle(vehicle):
+        return False, "Vehicle number must be 6 to 15 characters using letters, numbers, or dashes."
     if not service:
         return False, "Service is required."
+    if not date:
+        return False, "Booking date is required."
     customer = get_customer_by_id((customer_id or "").strip().upper())
     if not customer:
         return False, "Customer account was not found."
@@ -140,6 +152,16 @@ def _validate_booking_input(customer_id, phone, vehicle, service, date):
 
 
 def create_booking_for_customer(customer_id, name, phone, vehicle, brand_model, service, date):
+    if not all([
+        (customer_id or "").strip(),
+        (name or "").strip(),
+        (vehicle or "").strip(),
+        (brand_model or "").strip(),
+        (service or "").strip(),
+        (date or "").strip(),
+    ]):
+        return False, "Please fill all required booking fields.", None
+
     is_valid, message = _validate_booking_input(customer_id, phone, vehicle.strip().upper(), service.strip(), date.strip())
     if not is_valid:
         return False, message, None
@@ -172,17 +194,21 @@ def create_booking_for_customer(customer_id, name, phone, vehicle, brand_model, 
             return False, "All slots are booked for this date.", None
         create_booking(booking)
         get_db().commit()
-    except sqlite3.Error:
+        log_info(f"Booking created: {booking['booking_id']} for {booking['vehicle']}")
+    except sqlite3.Error as error:
         get_db().rollback()
+        log_error(f"Booking creation failed for customer {customer_id}: {error}")
         return False, "Booking could not be saved right now. Please try again.", None
     return True, "", booking
 
 
 def create_manual_booking(name, phone, vehicle, brand_model, service, date):
-    if not all([name.strip(), vehicle.strip(), brand_model.strip(), service.strip()]):
+    if not all([(name or "").strip(), (phone or "").strip(), (vehicle or "").strip(), (service or "").strip(), (date or "").strip()]):
         return False, "Please fill all manual entry fields.", None
     if not _validate_phone(phone):
         return False, "Phone number must be exactly 10 digits.", None
+    if not _validate_vehicle(vehicle):
+        return False, "Vehicle number must be 6 to 15 characters using letters, numbers, or dashes.", None
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     booking = {
@@ -194,7 +220,7 @@ def create_manual_booking(name, phone, vehicle, brand_model, service, date):
         "brand_model": brand_model.strip(),
         "service": service.strip(),
         "date": date,
-        "status": STATUS_CHECKED_IN,
+        "status": STATUS_IN_GARAGE,
         "created_at": timestamp,
         "checked_in_at": timestamp,
         "completed_at": None,
@@ -204,8 +230,10 @@ def create_manual_booking(name, phone, vehicle, brand_model, service, date):
         _begin_write_transaction()
         create_booking(booking)
         get_db().commit()
-    except sqlite3.Error:
+        log_info(f"Walk-in booking created: {booking['booking_id']} for {booking['vehicle']}")
+    except sqlite3.Error as error:
         get_db().rollback()
+        log_error(f"Walk-in booking creation failed for vehicle {vehicle}: {error}")
         return False, "Walk-in entry could not be saved right now. Please try again.", None
     return True, "", booking
 
@@ -225,19 +253,52 @@ def create_manual_booking_with_customer(customer_id, name, phone, vehicle, brand
 def get_admin_bookings(filters=None):
     filters = filters or {}
     customer_map = get_customer_map()
-    bookings = [
-        enrich_booking(booking, customer_map)
-        for booking in search_bookings(
-            query=filters.get("query"),
-            date=filters.get("date"),
-            status=filters.get("status"),
-        )
-    ]
+    try:
+        bookings = [
+            enrich_booking(booking, customer_map)
+            for booking in search_bookings(
+                query=filters.get("query"),
+                date=filters.get("date"),
+                status=filters.get("status"),
+            )
+        ]
+    except sqlite3.Error as error:
+        log_error(f"Booking search failed: {error}")
+        return []
     return sort_bookings_newest_first(bookings)
 
 
+def sync_booking_statuses(today):
+    try:
+        _begin_write_transaction()
+        get_db().execute(
+            """
+            UPDATE bookings
+            SET status = ?
+            WHERE status = 'checked_in'
+            """,
+            (STATUS_IN_GARAGE,),
+        )
+        get_db().execute(
+            """
+            UPDATE bookings
+            SET status = ?
+            WHERE status = ? AND date < ?
+            """,
+            (STATUS_NO_SHOW, STATUS_APPROVED, today),
+        )
+        get_db().commit()
+    except sqlite3.Error as error:
+        get_db().rollback()
+        log_error(f"Automatic booking status sync failed: {error}")
+
+
 def get_booking_by_id(booking_id):
-    booking = fetch_booking_by_id(booking_id)
+    try:
+        booking = fetch_booking_by_id(booking_id)
+    except sqlite3.Error as error:
+        log_error(f"Booking lookup failed for {booking_id}: {error}")
+        return None
     customer_map = get_customer_map()
     return enrich_booking(booking, customer_map) if booking else None
 
@@ -247,8 +308,10 @@ def get_booking_stats(bookings):
         "total": len(bookings),
         "pending": len([b for b in bookings if b.get("status") == STATUS_PENDING]),
         "approved": len([b for b in bookings if b.get("status") == STATUS_APPROVED]),
+        "in_garage": len([b for b in bookings if b.get("status") == STATUS_IN_GARAGE]),
         "completed": len([b for b in bookings if b.get("status") == STATUS_COMPLETED]),
         "rejected": len([b for b in bookings if b.get("status") == STATUS_REJECTED]),
+        "no_show": len([b for b in bookings if b.get("status") == STATUS_NO_SHOW]),
     }
 
 
@@ -279,8 +342,10 @@ def approve_booking(booking_id):
             return False, "No slots available for this date.", booking
         update_booking_status(booking_id, STATUS_APPROVED, None, None, 0)
         get_db().commit()
-    except sqlite3.Error:
+        log_info(f"Booking status changed to approved: {booking_id}")
+    except sqlite3.Error as error:
         get_db().rollback()
+        log_error(f"Booking approval failed for {booking_id}: {error}")
         return False, "Booking could not be approved right now. Please try again.", booking
     return True, "", fetch_booking_by_id(booking_id)
 
@@ -308,8 +373,10 @@ def reject_booking(booking_id):
             return False, "Only pending bookings can be rejected.", booking
         update_booking_status(booking_id, STATUS_REJECTED, None, None, 0)
         get_db().commit()
-    except sqlite3.Error:
+        log_info(f"Booking status changed to rejected: {booking_id}")
+    except sqlite3.Error as error:
         get_db().rollback()
+        log_error(f"Booking rejection failed for {booking_id}: {error}")
         return False, "Booking could not be rejected right now. Please try again.", booking
     return True, "", fetch_booking_by_id(booking_id)
 
@@ -336,11 +403,13 @@ def checkin_vehicle(booking_id, today):
         if booking.get("status") != STATUS_APPROVED:
             get_db().rollback()
             return False, "Booking must be approved before check-in.", booking
-        update_booking_status(booking_id, STATUS_CHECKED_IN, checked_in_at, None)
+        update_booking_status(booking_id, STATUS_IN_GARAGE, checked_in_at, None)
         get_db().commit()
-    except sqlite3.Error:
+        log_info(f"Booking status changed to in_garage: {booking_id}")
+    except sqlite3.Error as error:
         get_db().rollback()
-        return False, "Vehicle could not be checked-in right now. Please try again.", booking
+        log_error(f"Booking check-in failed for {booking_id}: {error}")
+        return False, "Vehicle could not be moved to garage right now. Please try again.", booking
     return True, "", fetch_booking_by_id(booking_id)
 
 
@@ -348,8 +417,8 @@ def complete_booking_by_id(booking_id):
     booking = fetch_booking_by_id(booking_id)
     if not booking:
         return False, "Booking not found.", None
-    if booking.get("status") != STATUS_CHECKED_IN:
-        return False, "Only checked-in vehicles can be marked complete.", booking
+    if booking.get("status") != STATUS_IN_GARAGE:
+        return False, "Only vehicles currently in the garage can be marked complete.", booking
 
     completed_at = datetime.now().strftime("%Y-%m-%d %H:%M")
     try:
@@ -358,13 +427,15 @@ def complete_booking_by_id(booking_id):
         if not booking:
             get_db().rollback()
             return False, "Booking not found.", None
-        if booking.get("status") != STATUS_CHECKED_IN:
+        if booking.get("status") != STATUS_IN_GARAGE:
             get_db().rollback()
-            return False, "Only checked-in vehicles can be marked complete.", booking
+            return False, "Only vehicles currently in the garage can be marked complete.", booking
         update_booking_status(booking_id, STATUS_COMPLETED, booking.get("checked_in_at"), completed_at, 0)
         get_db().commit()
-    except sqlite3.Error:
+        log_info(f"Booking status changed to completed: {booking_id}")
+    except sqlite3.Error as error:
         get_db().rollback()
+        log_error(f"Booking completion failed for {booking_id}: {error}")
         return False, "Vehicle could not be completed right now. Please try again.", booking
     return True, "", fetch_booking_by_id(booking_id)
 
@@ -377,7 +448,9 @@ def mark_whatsapp_sent(booking_id):
         _begin_write_transaction()
         update_whatsapp_sent(booking_id, 1)
         get_db().commit()
-    except sqlite3.Error:
+        log_info(f"WhatsApp marked sent for booking: {booking_id}")
+    except sqlite3.Error as error:
         get_db().rollback()
+        log_error(f"WhatsApp status update failed for {booking_id}: {error}")
         return False, "WhatsApp tracking could not be updated right now.", booking
     return True, "", fetch_booking_by_id(booking_id)

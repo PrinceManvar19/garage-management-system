@@ -202,7 +202,7 @@
       document.querySelectorAll('form').forEach((form) => {
         form.addEventListener('submit', (event) => {
           const submitter = event.submitter;
-          if (!submitter || !submitter.dataset.loadingSubmit) {
+          if (!submitter) {
             return;
           }
 

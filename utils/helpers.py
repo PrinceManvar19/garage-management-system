@@ -2,8 +2,9 @@ from datetime import datetime, timedelta
 
 from utils.constants import (
     STATUS_APPROVED,
-    STATUS_CHECKED_IN,
     STATUS_COMPLETED,
+    STATUS_IN_GARAGE,
+    STATUS_NO_SHOW,
     STATUS_PENDING,
     STATUS_REJECTED,
 )
@@ -11,11 +12,12 @@ from utils.constants import (
 
 def get_status_display(status):
     status_map = {
-        STATUS_PENDING: "Waiting for Approval",
+        STATUS_PENDING: "Pending",
         STATUS_APPROVED: "Approved",
-        STATUS_CHECKED_IN: "In Progress",
+        STATUS_IN_GARAGE: "In Garage",
         STATUS_REJECTED: "Rejected",
         STATUS_COMPLETED: "Completed",
+        STATUS_NO_SHOW: "No Show",
     }
     normalized = (status or STATUS_PENDING).lower()
     return status_map.get(normalized, normalized.title())

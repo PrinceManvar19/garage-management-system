@@ -2,7 +2,7 @@
 {% block title %}Admin Dashboard - Shreeji Auto Services{% endblock %}
 
 {% block content %}
-<div class="dashboard-wrap">
+<div class="dashboard-wrap admin-dashboard">
   <div class="dash-header">
     <div>
       <h1 class="dash-title">
@@ -10,7 +10,7 @@
       </h1>
       <p class="dash-sub">Shreeji Auto Services - Garage Management</p>
     </div>
-    <div style="display:flex;gap:0.75rem;align-items:center;">
+    <div class="dash-header-actions">
       <a href="/checkin" class="dash-btn-secondary">
         <i class="fas fa-motorcycle"></i> Check-In
       </a>
@@ -48,7 +48,34 @@
     </div>
   </div>
 
-  <div class="dash-card">
+  <div class="dash-card admin-section-card">
+    <div class="section-header admin-tight-header">
+      <h2 class="dash-card-title admin-title-tight">
+        <i class="fas fa-chart-line"></i> Daily Summary
+      </h2>
+    </div>
+    <div class="checkin-booking-grid admin-summary-grid">
+      <div><strong>Total Today:</strong> {{ today_total_count }}</div>
+      <div><strong>In Garage:</strong> {{ today_in_garage_count }}</div>
+      <div><strong>Completed:</strong> {{ today_completed_count }}</div>
+      <div><strong>Pending:</strong> {{ today_pending_count }}</div>
+    </div>
+    {% if whatsapp_booking and whatsapp_booking.phone %}
+      <div class="dash-alert dash-alert-success admin-followup-alert">
+        <span>Quick follow-up ready for {{ whatsapp_booking.name }} ({{ whatsapp_booking.booking_id }})</span>
+        <a href="/admin/whatsapp/{{ whatsapp_booking.booking_id }}"
+           target="_blank"
+           rel="noopener"
+           class="btn btn-success btn-sm"
+           data-loading-text="Opening..."
+           data-toast-message="WhatsApp opened">
+          Send WhatsApp
+        </a>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="dash-card admin-section-card">
     <h2 class="dash-card-title">
       <i class="fas fa-id-card"></i> Check-In Section
     </h2>
@@ -91,7 +118,7 @@
                class="dash-btn-primary"
                data-whatsapp-trigger="true"
                data-booking-id="{{ booking.booking_id }}"
-               data-action="checked_in"
+               data-action="in_garage"
                data-loading-text="Checking In...">
               <i class="fas fa-check-circle"></i> Check-In
             </a>
@@ -108,7 +135,7 @@
                class="btn btn-success btn-sm"
                data-whatsapp-button="true"
                data-booking-id="{{ booking.booking_id }}"
-               data-action="checked_in"
+               data-action="in_garage"
                data-loading-text="Sending..."
                data-toast-message="WhatsApp opened"
                style="display:none;margin-top:1rem;"
@@ -118,12 +145,14 @@
           {% endif %}
         {% elif booking.date != today %}
           <div class="dash-sub" style="margin-top:1rem;">Not scheduled for today</div>
-        {% elif booking.status == 'checked_in' %}
-          <div class="dash-sub" style="margin-top:1rem;">This vehicle is already checked in.</div>
+        {% elif booking.status == 'in_garage' %}
+          <div class="dash-sub" style="margin-top:1rem;">This vehicle is already in the garage.</div>
         {% elif booking.status == 'completed' %}
           <div class="dash-sub" style="margin-top:1rem;">This booking has already been completed.</div>
         {% elif booking.status == 'rejected' %}
           <div class="dash-sub" style="margin-top:1rem;">This booking was rejected and cannot be checked in.</div>
+        {% elif booking.status == 'no_show' %}
+          <div class="dash-sub" style="margin-top:1rem;">This booking is marked as No Show.</div>
         {% else %}
           <div class="dash-sub" style="margin-top:1rem;">This booking must be approved before check-in.</div>
         {% endif %}
@@ -131,16 +160,16 @@
     {% endif %}
   </div>
 
-  <div class="dash-card">
+  <div class="dash-card admin-section-card admin-priority-card">
     <div class="section-header">
-      <h2 class="dash-card-title" style="margin-bottom:0;">
+      <h2 class="dash-card-title admin-title-tight">
         <i class="fas fa-warehouse"></i> Vehicles in Garage
       </h2>
       <a href="/export/garage" class="btn btn-export">
         <i class="fas fa-download"></i> Export Garage Data
       </a>
     </div>
-    <p class="dash-sub" style="margin-top:-0.25rem; margin-bottom:1rem;">
+    <p class="dash-sub admin-card-subtitle">
       Vehicles in Garage: {{ vehicles_in_garage|length }}
     </p>
 
@@ -193,7 +222,7 @@
                   </a>
                 {% endif %}
                 <a href="/admin/complete/{{ b.booking_id }}"
-                   class="btn btn-primary btn-sm"
+                   class="btn btn-primary btn-sm btn-complete-soft"
                    data-whatsapp-trigger="true"
                    data-booking-id="{{ b.booking_id }}"
                    data-action="completed"
@@ -211,7 +240,7 @@
     </div>
   </div>
 
-  <div class="dash-card">
+  <div class="dash-card admin-section-card">
     <h2 class="dash-card-title">
       <i class="fas fa-calendar-alt"></i> Slot Management
     </h2>
@@ -234,7 +263,7 @@
       </div>
     </form>
 
-    <div class="table-responsive dash-table-wrap" style="margin-top:1.5rem;">
+    <div class="table-responsive dash-table-wrap admin-table-spacing">
       <table class="dash-table">
         <thead>
           <tr><th>Date</th><th>Total Slots</th><th>Booked</th><th>Available</th></tr>
@@ -262,9 +291,9 @@
     </div>
   </div>
 
-  <div class="dash-card">
+  <div class="dash-card admin-section-card">
     <div class="section-header">
-      <h2 class="dash-card-title" style="margin-bottom:0;">
+      <h2 class="dash-card-title admin-title-tight">
         <i class="fas fa-list-alt"></i> Booking Requests
       </h2>
       <a href="/export/bookings" class="btn btn-export">
@@ -296,9 +325,10 @@
             <option value="">All Statuses</option>
             <option value="pending" {% if filters and filters.status == 'pending' %}selected{% endif %}>Pending</option>
             <option value="approved" {% if filters and filters.status == 'approved' %}selected{% endif %}>Approved</option>
-            <option value="checked_in" {% if filters and filters.status == 'checked_in' %}selected{% endif %}>Checked-In</option>
+            <option value="in_garage" {% if filters and filters.status == 'in_garage' %}selected{% endif %}>In Garage</option>
             <option value="completed" {% if filters and filters.status == 'completed' %}selected{% endif %}>Completed</option>
             <option value="rejected" {% if filters and filters.status == 'rejected' %}selected{% endif %}>Rejected</option>
+            <option value="no_show" {% if filters and filters.status == 'no_show' %}selected{% endif %}>No Show</option>
           </select>
         </div>
         <div class="dash-form-group" style="flex:0; display:flex; gap:0.75rem;">
@@ -341,7 +371,7 @@
                 data-raw-date="{{ b.date }}"
                 data-is-today="{% if b.date == today %}true{% else %}false{% endif %}"
                 data-status="{{ b.status }}"
-                data-status-label="{% if b.status == 'pending' %}Pending{% elif b.status == 'approved' %}Approved{% elif b.status == 'checked_in' %}Checked-In{% elif b.status == 'rejected' %}Rejected{% elif b.status == 'completed' %}Completed{% else %}{{ b.status }}{% endif %}">
+                data-status-label="{% if b.status == 'pending' %}Pending{% elif b.status == 'approved' %}Approved{% elif b.status == 'in_garage' %}In Garage{% elif b.status == 'rejected' %}Rejected{% elif b.status == 'completed' %}Completed{% elif b.status == 'no_show' %}No Show{% else %}{{ b.status }}{% endif %}">
               <td><strong>{{ b.booking_id }}</strong></td>
               <td>
                 <div>{{ b.name }}</div>
@@ -359,12 +389,14 @@
                   <span class="status-badge status-pending">Pending</span>
                 {% elif b.status == 'approved' %}
                   <span class="status-badge status-approved">Approved</span>
-                {% elif b.status == 'checked_in' %}
-                  <span class="status-badge status-in_service">Checked-In</span>
+                {% elif b.status == 'in_garage' %}
+                  <span class="status-badge status-in_service">In Garage</span>
                 {% elif b.status == 'rejected' %}
                   <span class="status-badge status-rejected">Rejected</span>
                 {% elif b.status == 'completed' %}
                   <span class="status-badge status-completed">Completed</span>
+                {% elif b.status == 'no_show' %}
+                  <span class="status-badge status-rejected">No Show</span>
                 {% else %}
                   <span class="status-badge">{{ b.status }}</span>
                 {% endif %}
@@ -376,8 +408,8 @@
                      data-loading-text="Checking In...">
                     Check-In
                   </a>
-                {% elif b.status == 'checked_in' %}
-                  <span class="status-badge status-in_service">Checked-In</span>
+                {% elif b.status == 'in_garage' %}
+                  <span class="action-meta-time">{{ b.formatted_checked_in_at or b.checked_in_at or '-' }}</span>
                 {% else %}
                   <span class="dash-sub">-</span>
                 {% endif %}
@@ -488,7 +520,7 @@
     } else if (status === 'approved') {
       message.hidden = false;
       message.textContent = 'Use the Check-In column when the vehicle arrives.';
-    } else if (status === 'checked_in') {
+    } else if (status === 'in_garage') {
       message.hidden = false;
       message.textContent = 'Vehicle in service';
     } else if (status === 'completed') {
@@ -497,6 +529,9 @@
     } else if (status === 'rejected') {
       message.hidden = false;
       message.textContent = 'Booking was rejected';
+    } else if (status === 'no_show') {
+      message.hidden = false;
+      message.textContent = 'Booking was marked as No Show';
     }
 
     backdrop.hidden = false;
@@ -528,7 +563,7 @@
       } else if (currentFilter === 'approved') {
         visible = status === 'approved';
       } else if (currentFilter === 'in_garage') {
-        visible = status === 'checked_in';
+        visible = status === 'in_garage';
       }
 
       row.style.display = visible ? '' : 'none';

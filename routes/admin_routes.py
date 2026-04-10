@@ -17,9 +17,17 @@ from services.booking_service import (
     mark_whatsapp_sent,
     normalize_phone,
     reject_booking as reject_booking_service,
+    sync_booking_statuses,
 )
 from services.slot_service import get_slots_for_admin, set_slot_total
-from utils.constants import STATUS_APPROVED, STATUS_CHECKED_IN, STATUS_COMPLETED, STATUS_PENDING, STATUS_REJECTED
+from utils.constants import (
+    STATUS_APPROVED,
+    STATUS_COMPLETED,
+    STATUS_IN_GARAGE,
+    STATUS_NO_SHOW,
+    STATUS_PENDING,
+    STATUS_REJECTED,
+)
 from utils.helpers import format_date_display, format_datetime_display, get_today_date_string
 
 
@@ -34,9 +42,10 @@ def _build_whatsapp_message(booking):
     status_labels = {
         STATUS_PENDING: "Pending",
         STATUS_APPROVED: "Approved",
-        STATUS_CHECKED_IN: "Checked-In",
+        STATUS_IN_GARAGE: "In Garage",
         STATUS_REJECTED: "Rejected",
         STATUS_COMPLETED: "Completed",
+        STATUS_NO_SHOW: "No Show",
     }
     status = booking.get("status")
     return (
@@ -82,6 +91,7 @@ def _render_admin_dashboard(
     filters=None,
     booking_data=None,
     checkin_booking_id="",
+    whatsapp_booking=None,
 ):
     filters = filters or {
         "query": request.args.get("query", ""),
@@ -89,10 +99,15 @@ def _render_admin_dashboard(
         "status": request.args.get("status", ""),
     }
     today = get_today_date_string()
+    sync_booking_statuses(today)
     all_bookings = get_admin_bookings()
     bookings = get_admin_bookings(filters)
     stats = get_booking_stats(all_bookings)
-    vehicles_in_garage = [booking for booking in all_bookings if booking.get("status") == STATUS_CHECKED_IN]
+    vehicles_in_garage = [booking for booking in all_bookings if booking.get("status") == STATUS_IN_GARAGE]
+    today_bookings = [booking for booking in all_bookings if booking.get("date") == today]
+    today_pending = [booking for booking in today_bookings if booking.get("status") == STATUS_PENDING]
+    today_completed = [booking for booking in today_bookings if booking.get("status") == STATUS_COMPLETED]
+    today_in_garage = [booking for booking in today_bookings if booking.get("status") == STATUS_IN_GARAGE]
     slots = {
         date: {
             **slot,
@@ -109,14 +124,21 @@ def _render_admin_dashboard(
         total_bookings=stats["total"],
         pending_count=stats["pending"],
         approved_count=stats["approved"],
+        in_garage_count=stats["in_garage"],
         completed_count=stats["completed"],
         rejected_count=stats["rejected"],
+        no_show_count=stats["no_show"],
+        today_total_count=len(today_bookings),
+        today_pending_count=len(today_pending),
+        today_completed_count=len(today_completed),
+        today_in_garage_count=len(today_in_garage),
         filters=filters,
         today=today,
         today_display=format_date_display(today),
         verified_checkin_booking=booking_data,
         booking_data=booking_data,
         checkin_booking_id=checkin_booking_id,
+        whatsapp_booking=whatsapp_booking,
     )
 
 
@@ -133,7 +155,14 @@ def admin_dashboard():
         if not booking_data:
             flash("Booking not found", "danger")
 
-    return _render_admin_dashboard(booking_data=booking_data, checkin_booking_id=checkin_booking_id)
+    whatsapp_booking_id = request.args.get("whatsapp_booking_id", "").strip().upper()
+    whatsapp_booking = get_booking_by_id(whatsapp_booking_id) if whatsapp_booking_id else None
+
+    return _render_admin_dashboard(
+        booking_data=booking_data,
+        checkin_booking_id=checkin_booking_id,
+        whatsapp_booking=whatsapp_booking,
+    )
 
 
 @admin_bp.route("/admin/checkin/verify", methods=["POST"])
@@ -163,6 +192,7 @@ def export_bookings():
     if not _require_admin():
         return redirect(url_for("main.home"))
 
+    sync_booking_statuses(get_today_date_string())
     bookings = get_admin_bookings()
     rows = [
         [
@@ -190,7 +220,8 @@ def export_garage():
     if not _require_admin():
         return redirect(url_for("main.home"))
 
-    bookings = [booking for booking in get_admin_bookings() if booking.get("status") == STATUS_CHECKED_IN]
+    sync_booking_statuses(get_today_date_string())
+    bookings = [booking for booking in get_admin_bookings() if booking.get("status") == STATUS_IN_GARAGE]
     rows = [
         [
             _normalize_csv_value(booking.get("booking_id", "")),
@@ -256,7 +287,7 @@ def approve_booking(booking_id):
         return redirect(url_for("admin.admin_dashboard"))
 
     flash("Booking Approved", "success")
-    return redirect(url_for("admin.admin_dashboard"))
+    return redirect(url_for("admin.admin_dashboard", whatsapp_booking_id=booking_id))
 
 
 @admin_bp.route("/admin/reject/<booking_id>")
@@ -275,7 +306,7 @@ def admin_checkin_booking(booking_id):
         return redirect(url_for("main.home"))
 
     success, message, booking = checkin_vehicle(booking_id, get_today_date_string())
-    flash(message if not success else "Vehicle checked-in successfully", "danger" if not success else "success")
+    flash(message if not success else "Vehicle moved to garage successfully", "danger" if not success else "success")
     booking_data = get_booking_by_id(booking_id) if success else (enrich_booking(booking) if booking else None)
     return _render_admin_dashboard(booking_data=booking_data, checkin_booking_id=booking_id)
 
@@ -290,7 +321,7 @@ def send_booking_whatsapp(booking_id):
         flash("Booking not found", "danger")
         return redirect(url_for("admin.admin_dashboard"))
 
-    if booking.get("status") not in {STATUS_PENDING, STATUS_APPROVED, STATUS_CHECKED_IN, STATUS_REJECTED, STATUS_COMPLETED}:
+    if booking.get("status") not in {STATUS_PENDING, STATUS_APPROVED, STATUS_IN_GARAGE, STATUS_REJECTED, STATUS_COMPLETED, STATUS_NO_SHOW}:
         flash("WhatsApp is not available for this booking", "danger")
         return redirect(url_for("admin.admin_dashboard"))
 
@@ -338,7 +369,7 @@ def checkin():
                 flash(message, "danger")
             else:
                 verified_booking = enrich_booking(booking)
-                flash("Vehicle checked-in successfully", "success")
+                flash("Vehicle moved to garage successfully", "success")
 
         elif action == "manual_entry":
             customer_id = request.form.get("customer_id", "").strip().upper()
@@ -366,7 +397,8 @@ def checkin():
                     verified_booking = enrich_booking(booking)
                     flash(f'Walk-in vehicle added to garage as {booking["booking_id"]}', "success")
 
-    vehicles_in_garage = [booking for booking in get_admin_bookings() if booking.get("status") == STATUS_CHECKED_IN]
+    sync_booking_statuses(today)
+    vehicles_in_garage = [booking for booking in get_admin_bookings() if booking.get("status") == STATUS_IN_GARAGE]
     return render_template(
         "checkin.html",
         today=today,
@@ -386,8 +418,8 @@ def complete_booking(booking_id):
         flash("Booking not found", "error")
         return redirect(url_for("admin.admin_dashboard"))
 
-    if booking.get("status") != STATUS_CHECKED_IN:
-        flash("Only checked-in vehicles can be marked complete", "danger")
+    if booking.get("status") != STATUS_IN_GARAGE:
+        flash("Only vehicles currently in the garage can be marked complete", "danger")
         return redirect(url_for("admin.admin_dashboard"))
 
     success, message, _updated_booking = complete_booking_by_id(booking_id)
@@ -396,4 +428,4 @@ def complete_booking(booking_id):
         return redirect(url_for("admin.admin_dashboard"))
 
     flash("Vehicle marked completed", "success")
-    return redirect(url_for("admin.admin_dashboard"))
+    return redirect(url_for("admin.admin_dashboard", whatsapp_booking_id=booking_id))

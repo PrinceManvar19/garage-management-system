@@ -51,7 +51,7 @@
                   class="dash-btn-primary"
                   data-whatsapp-trigger="true"
                   data-booking-id="{{ verified_booking.booking_id }}"
-                  data-action="checked_in"
+                  data-action="in_garage"
                   data-loading-submit="true"
                   data-loading-text="Checking In...">
             <i class="fas fa-check-circle"></i> Check-In Vehicle
@@ -63,7 +63,7 @@
         <div class="dash-sub" style="margin-top:1rem;">This booking is not available for check-in right now.</div>
         {% endif %}
 
-        {% if booking.status == 'checked_in' and booking.phone %}
+        {% if booking.status == 'in_garage' and booking.phone %}
           {% set message =
           "Hello " ~ booking.name ~ "%0A%0A" ~
           "Your vehicle has been received at our garage.%0A" ~
@@ -75,7 +75,7 @@
              class="btn btn-success btn-sm"
              data-whatsapp-button="true"
              data-booking-id="{{ booking.booking_id }}"
-             data-action="checked_in"
+             data-action="in_garage"
              data-loading-text="Sending..."
              data-toast-message="WhatsApp opened"
              style="display:none;margin-top:1rem;"
@@ -158,7 +158,7 @@
             {% endfor %}
           {% else %}
             <tr>
-              <td colspan="5" class="dash-empty">No vehicles checked-in right now.</td>
+              <td colspan="5" class="dash-empty">No vehicles in garage right now.</td>
             </tr>
           {% endif %}
         </tbody>

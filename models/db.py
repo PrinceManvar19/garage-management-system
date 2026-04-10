@@ -200,6 +200,13 @@ def migrate_bookings_table(db):
             ADD COLUMN whatsapp_sent INTEGER NOT NULL DEFAULT 0
             """
         )
+    db.execute(
+        """
+        UPDATE bookings
+        SET status = 'in_garage'
+        WHERE status = 'checked_in'
+        """
+    )
 
 
 def init_app(app):

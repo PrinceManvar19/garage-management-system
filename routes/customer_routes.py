@@ -57,15 +57,20 @@ def book():
     date = request.form.get("date", "").strip()
     customer_phone = request.form.get("customer_phone", "").strip() or session.get("phone", "").strip()
 
-    success, message, booking = create_booking_for_customer(
-        session["customer_id"],
-        session["name"],
-        customer_phone,
-        vehicle,
-        brand_model,
-        service,
-        date,
-    )
+    try:
+        success, message, booking = create_booking_for_customer(
+            session["customer_id"],
+            session["name"],
+            customer_phone,
+            vehicle,
+            brand_model,
+            service,
+            date,
+        )
+    except Exception:
+        flash("Booking could not be processed right now. Please try again.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
     if not success:
         flash(message, "danger")
         return redirect(url_for("customer.dashboard"))
