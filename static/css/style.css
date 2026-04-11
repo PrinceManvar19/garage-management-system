@@ -1803,6 +1803,15 @@ input:focus {
 
 .dash-table-wrap { overflow-x: auto; }
 
+.table-container {
+  overflow-x: auto;
+  width: 100%;
+}
+
+table {
+  min-width: 900px;
+}
+
 .admin-dashboard .dash-table-wrap {
   margin-top: 0.4rem;
   border: 1px solid #2a2a2a;
@@ -1821,7 +1830,7 @@ input:focus {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.82rem;
-  min-width: 760px;
+  min-width: 900px;
 }
 
 .dash-table th {
@@ -1841,7 +1850,7 @@ input:focus {
 }
 
 .admin-dashboard .dash-table {
-  min-width: 100%;
+  min-width: 900px;
   background: transparent;
 }
 
