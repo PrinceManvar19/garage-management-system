@@ -18,6 +18,16 @@ def get_db():
     return g.db
 
 
+def safe_execute(db_func, *args, **kwargs):
+    """Context manager wrapper for safe DB operations with logging."""
+    try:
+        return db_func(*args, **kwargs)
+    except Exception as e:
+        from utils.helpers import log_action
+        log_action("DB SAFE EXECUTE ERROR", f"{db_func.__name__} - {str(e)}")
+        raise
+
+
 def close_db(_error=None):
     connection = g.pop("db", None)
     if connection is not None:

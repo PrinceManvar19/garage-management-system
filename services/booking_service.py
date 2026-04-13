@@ -142,6 +142,8 @@ def _validate_booking_input(customer_id, phone, vehicle, service, date):
 def create_booking_for_customer(customer_id, name, phone, vehicle, brand_model, service, date):
     is_valid, message = _validate_booking_input(customer_id, phone, vehicle.strip().upper(), service.strip(), date.strip())
     if not is_valid:
+        from utils.helpers import log_action
+        log_action("BOOKING VALIDATION FAILED", f"{customer_id} - {message}")
         return False, message, None
     customer = get_customer_by_id(customer_id.strip().upper())
     resolved_phone = normalize_phone(phone or customer.get("phone", ""))
@@ -172,9 +174,18 @@ def create_booking_for_customer(customer_id, name, phone, vehicle, brand_model, 
             return False, "All slots are booked for this date.", None
         create_booking(booking)
         get_db().commit()
-    except sqlite3.Error:
+        from utils.helpers import log_action
+        log_action("BOOKING CREATED", f"{booking['booking_id']} - {name}")
+    except sqlite3.Error as e:
         get_db().rollback()
+        from utils.helpers import log_action
+        log_action("BOOKING ERROR SQLITE", f"{booking.get('booking_id', 'unknown')} - {str(e)}")
         return False, "Booking could not be saved right now. Please try again.", None
+    except Exception as e:
+        get_db().rollback()
+        from utils.helpers import log_action
+        log_action("BOOKING ERROR", f"{booking.get('booking_id', 'unknown')} - {str(e)}")
+        return False, "Unexpected error occurred. Please try again.", None
     return True, "", booking
 
 
@@ -215,6 +226,8 @@ def create_manual_booking_with_customer(customer_id, name, phone, vehicle, brand
     if normalized_customer_id:
         customer = get_customer_by_id(normalized_customer_id)
         if not customer:
+            from utils.helpers import log_action
+            log_action("WALKIN CUSTOMER NOT FOUND", f"{customer_id}")
             return False, "Customer ID was not found.", None
         name = customer.get("name", name)
         phone = customer.get("phone", phone)

@@ -60,3 +60,14 @@ def format_datetime_display(value):
     if not parsed:
         return value or ""
     return parsed.strftime("%d-%m-%Y %H:%M")
+
+
+def log_action(action: str, details: str):
+    """Log action to logs.txt: [DATE TIME] ACTION - details"""
+    from pathlib import Path
+    log_file = Path(__file__).parent.parent / "logs.txt"  # project root
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    log_entry = f"[{timestamp}] {action.upper()} - {details}\n"
+    log_file.parent.mkdir(exist_ok=True)
+    with open(log_file, "a", encoding="utf-8") as f:
+        f.write(log_entry)

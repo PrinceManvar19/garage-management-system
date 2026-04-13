@@ -43,6 +43,7 @@ def search_bookings(query=None, date=None, status=None):
         AND (? IS NULL OR status = ?)
         AND (? IS NULL OR date = ?)
         ORDER BY COALESCE(created_at, checked_in_at, date, '') DESC
+        LIMIT 50
         """,
         (
             normalized_query,
@@ -83,53 +84,77 @@ def get_bookings_by_customer(customer_id):
 
 
 def create_booking(booking):
-    get_db().execute(
-        """
-        INSERT INTO bookings (
-            booking_id, customer_id, name, phone, vehicle, brand_model,
-            service, date, status, created_at, checked_in_at, completed_at, whatsapp_sent
+    try:
+        db = get_db()
+        db.execute(
+            """
+            INSERT INTO bookings (
+                booking_id, customer_id, name, phone, vehicle, brand_model,
+                service, date, status, created_at, checked_in_at, completed_at, whatsapp_sent
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                booking["booking_id"],
+                booking.get("customer_id", ""),
+                booking["name"],
+                booking.get("phone", ""),
+                booking["vehicle"],
+                booking.get("brand_model", ""),
+                booking["service"],
+                booking["date"],
+                booking["status"],
+                booking.get("created_at", ""),
+                booking.get("checked_in_at"),
+                booking.get("completed_at"),
+                int(booking.get("whatsapp_sent", 0) or 0),
+            ),
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            booking["booking_id"],
-            booking.get("customer_id", ""),
-            booking["name"],
-            booking.get("phone", ""),
-            booking["vehicle"],
-            booking.get("brand_model", ""),
-            booking["service"],
-            booking["date"],
-            booking["status"],
-            booking.get("created_at", ""),
-            booking.get("checked_in_at"),
-            booking.get("completed_at"),
-            int(booking.get("whatsapp_sent", 0) or 0),
-        ),
-    )
+        from utils.helpers import log_action
+        log_action("BOOKING CREATED", f"{booking['booking_id']} - {booking['name']}")
+    except Exception as e:
+        from utils.helpers import log_action
+        log_action("DB ERROR CREATE BOOKING", f"{booking['booking_id']} - {str(e)}")
+        raise
 
 
 def update_booking_status(booking_id, status, checked_in_at=None, completed_at=None, whatsapp_sent=None):
-    get_db().execute(
-        """
-        UPDATE bookings
-        SET status = ?, checked_in_at = ?, completed_at = ?,
-            whatsapp_sent = COALESCE(?, whatsapp_sent)
-        WHERE booking_id = ?
-        """,
-        (status, checked_in_at, completed_at, whatsapp_sent, booking_id),
-    )
+    try:
+        db = get_db()
+        db.execute(
+            """
+            UPDATE bookings
+            SET status = ?, checked_in_at = ?, completed_at = ?,
+                whatsapp_sent = COALESCE(?, whatsapp_sent)
+            WHERE booking_id = ?
+            """,
+            (status, checked_in_at, completed_at, whatsapp_sent, booking_id),
+        )
+        from utils.helpers import log_action
+        log_action("STATUS UPDATED", f"{booking_id} to {status}")
+    except Exception as e:
+        from utils.helpers import log_action
+        log_action("DB ERROR UPDATE STATUS", f"{booking_id} - {str(e)}")
+        raise
 
 
 def update_whatsapp_sent(booking_id, whatsapp_sent):
-    get_db().execute(
-        """
-        UPDATE bookings
-        SET whatsapp_sent = ?
-        WHERE booking_id = ?
-        """,
-        (int(whatsapp_sent), booking_id),
-    )
+    try:
+        db = get_db()
+        db.execute(
+            """
+            UPDATE bookings
+            SET whatsapp_sent = ?
+            WHERE booking_id = ?
+            """,
+            (int(whatsapp_sent), booking_id),
+        )
+        from utils.helpers import log_action
+        log_action("WHATSAPP SENT", f"{booking_id}")
+    except Exception as e:
+        from utils.helpers import log_action
+        log_action("DB ERROR WHATSAPP UPDATE", f"{booking_id} - {str(e)}")
+        raise
 
 
 def get_latest_booking_id(prefix):

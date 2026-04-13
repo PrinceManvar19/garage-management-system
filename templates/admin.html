@@ -14,18 +14,35 @@
       <a href="/checkin" class="dash-btn-secondary">
         <i class="fas fa-motorcycle"></i> Check-In
       </a>
+      <div class="export-dropdown">
+        <button class="dash-btn-secondary export-btn" onclick="toggleExportDropdown()">
+          <i class="fas fa-download"></i> Export
+        </button>
+        <div class="export-dropdown-menu" id="exportDropdown">
+          <a href="/export/bookings">
+            <i class="fas fa-file-csv"></i> Export Bookings
+          </a>
+          <a href="/admin/export-data">
+            <i class="fas fa-file-csv"></i> Export Customers
+          </a>
+          <a href="/export/garage">
+            <i class="fas fa-file-csv"></i> Export Garage Data
+          </a>
+        </div>
+      </div>
       <a href="/logout" class="dash-logout">
         <i class="fas fa-sign-out-alt"></i> Logout
       </a>
     </div>
   </div>
 
-  <div class="admin-stats">
+<div class="admin-stats">
     <div class="admin-stat-card">
       <i class="fas fa-calendar-check"></i>
       <div class="admin-stat-num">{{ total_bookings }}</div>
       <div class="admin-stat-label">Total Bookings</div>
     </div>
+
     <div class="admin-stat-card warn">
       <i class="fas fa-clock"></i>
       <div class="admin-stat-num">{{ pending_count }}</div>
@@ -65,7 +82,7 @@
                  style="text-transform:uppercase;letter-spacing:0.04em;" />
         </div>
         <div class="dash-form-group" style="flex:0;">
-          <button type="submit" class="dash-btn-primary" style="margin-top:0;">
+<button type="submit" class="dash-btn-primary loading-btn" data-loading-text="Fetching..." style="margin-top:0;">
             <i class="fas fa-search"></i> Fetch Booking
           </button>
         </div>
@@ -192,8 +209,8 @@
                     Send WhatsApp
                   </a>
                 {% endif %}
-                <a href="/admin/complete/{{ b.booking_id }}"
-                   class="btn btn-primary btn-sm"
+<a href="/admin/complete/{{ b.booking_id }}"
+                   class="btn btn-primary btn-sm loading-btn"
                    data-whatsapp-trigger="true"
                    data-booking-id="{{ b.booking_id }}"
                    data-action="completed"
@@ -371,8 +388,8 @@
               </td>
               <td class="action-col">
                 {% if b.status == 'approved' %}
-                  <a href="/admin/checkin/{{ b.booking_id }}"
-                     class="btn btn-primary btn-sm action-btn-compact"
+<a href="/admin/checkin/{{ b.booking_id }}"
+                     class="btn btn-primary btn-sm action-btn-compact loading-btn"
                      data-loading-text="Checking In...">
                     Check-In
                   </a>
@@ -453,6 +470,67 @@
 <script>
   let activeBookingRow = null;
   let currentFilter = 'all';
+  let exportDropdownOpen = false;
+  let searchTimeout;
+
+  // Simple toast notification
+  function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+      toast.classList.add('toast-hide');
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  }
+
+  // Loading state handler
+  function handleLoadingBtn(btn) {
+    if (btn.classList.contains('loading-btn')) {
+      const originalText = btn.innerHTML;
+      const loadingText = btn.dataset.loadingText || 'Processing...';
+      btn.disabled = true;
+      btn.classList.add('is-loading');
+      btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${loadingText}`;
+      return originalText;
+    }
+    return null;
+  }
+
+  function restoreBtn(btn, originalText) {
+    if (originalText) {
+      btn.disabled = false;
+      btn.classList.remove('is-loading');
+      btn.innerHTML = originalText;
+    }
+  }
+
+function toggleExportDropdown() {
+    const dropdown = document.getElementById('exportDropdown');
+    exportDropdownOpen = !exportDropdownOpen;
+    dropdown.style.display = exportDropdownOpen ? 'block' : 'none';
+  }
+
+  // Close dropdown when clicking export menu item or outside
+  document.addEventListener('click', function(e) {
+    const dropdown = document.querySelector('.export-dropdown');
+    const menu = document.getElementById('exportDropdown');
+    if (exportDropdownOpen && !dropdown.contains(e.target)) {
+      menu.style.display = 'none';
+      exportDropdownOpen = false;
+    }
+  });
+
+  // Close dropdown when clicking menu item
+  document.getElementById('exportDropdown').addEventListener('click', function(e) {
+    if (e.target.tagName === 'A') {
+      document.getElementById('exportDropdown').style.display = 'none';
+      exportDropdownOpen = false;
+    }
+  });
+
 
   function openBookingModal(row) {
     const backdrop = document.getElementById('bookingModalBackdrop');
@@ -483,8 +561,8 @@
 
     if (status === 'pending') {
       actions.innerHTML =
-        '<a href="/admin/approve/' + bookingId + '" class="dash-btn-primary" data-loading-text="Approving...">Approve</a>' +
-        '<a href="/admin/reject/' + bookingId + '" class="dash-btn-secondary booking-modal-danger" data-loading-text="Rejecting...">Reject</a>';
+        '<a href="/admin/approve/' + bookingId + '" class="dash-btn-primary loading-btn" data-loading-text="Approving..." data-toast="Booking Approved">Approve</a>' +
+        '<a href="/admin/reject/' + bookingId + '" class="dash-btn-secondary booking-modal-danger loading-btn" data-loading-text="Rejecting..." data-toast="Booking Rejected">Reject</a>';
     } else if (status === 'approved') {
       message.hidden = false;
       message.textContent = 'Use the Check-In column when the vehicle arrives.';
@@ -550,20 +628,67 @@
     applyFilter();
   }
 
+  // Auto refresh booking table every 30 seconds
+  function refreshBookingsTable() {
+    const tableBody = document.querySelector('.dash-table tbody');
+    if (!tableBody) return;
+
+    fetch('/admin?ajax=bookings&' + new URLSearchParams(window.location.search).toString())
+      .then(response => response.text())
+      .then(html => {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const newBody = doc.querySelector('.dash-table tbody');
+        if (newBody) {
+          tableBody.innerHTML = newBody.innerHTML;
+          // Re-attach event listeners if needed
+        }
+      })
+      .catch(() => {}); // Silent fail
+  }
+
+  // Debounced search
+  function debounceSearch() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      const form = document.querySelector('form[action="/admin"]');
+      if (form) form.submit();
+    }, 300);
+  }
+
+  // Init
   (function() {
     const storageKey = 'garage_whatsapp_action';
     const searchInput = document.querySelector('input[name="query"]');
     const modalBackdrop = document.getElementById('bookingModalBackdrop');
     const modalClose = document.getElementById('bookingModalClose');
 
+    // Loading handlers for all buttons
+    document.addEventListener('click', function(e) {
+      if (e.target.matches('.loading-btn, .loading-btn *')) {
+        const btn = e.target.closest('.loading-btn');
+        const originalText = handleLoadingBtn(btn);
+        // Restore after navigation (handled by browser redirect)
+      }
+    });
+
+    // Toast handlers
+    document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('[data-toast]').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const toastMsg = this.dataset.toast;
+          if (toastMsg) showToast(toastMsg);
+        });
+      });
+    });
+
     if (searchInput) {
+      searchInput.addEventListener('input', debounceSearch);
       searchInput.focus();
       searchInput.addEventListener('keydown', function(event) {
         if (event.key === 'Enter') {
           const form = searchInput.closest('form');
-          if (form) {
-            form.submit();
-          }
+          if (form) form.submit();
         }
       });
     }
@@ -615,6 +740,23 @@
     }
 
     setFilter('all');
+    // Auto refresh every 30 seconds
+    setInterval(refreshBookingsTable, 30000);
   })();
 </script>
+
+<style>
+.loading-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+}
+</style>
+
 {% endblock %}

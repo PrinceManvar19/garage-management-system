@@ -20,6 +20,7 @@ from services.booking_service import (
 )
 from services.slot_service import get_slots_for_admin, set_slot_total
 from utils.constants import STATUS_APPROVED, STATUS_CHECKED_IN, STATUS_COMPLETED, STATUS_PENDING, STATUS_REJECTED
+from models.customer_model import get_customer_map
 from utils.helpers import format_date_display, format_datetime_display, get_today_date_string
 
 
@@ -306,6 +307,64 @@ def send_booking_whatsapp(booking_id):
 
     whatsapp_url = f"https://wa.me/91{phone}?text={quote(_build_whatsapp_message(booking))}"
     return redirect(whatsapp_url)
+
+
+@admin_bp.route("/admin/export-data")
+def export_data():
+    if not _require_admin():
+        return redirect(url_for("main.home"))
+
+    import zipfile
+    from io import BytesIO
+
+    # Create ZIP in memory
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        
+        # Add customers CSV
+        customer_map = get_customer_map()
+        customer_rows = []
+        for cust_id, customer in customer_map.items():
+            customer_rows.append([
+                _normalize_csv_value(customer.get("id")),
+                _normalize_csv_value(customer.get("name")),
+                _normalize_csv_value(customer.get("phone")),
+                _normalize_csv_value(customer.get("vehicle")),
+            ])
+        customer_csv_content = StringIO()
+        customer_writer = csv.writer(customer_csv_content, quoting=csv.QUOTE_ALL)
+        customer_writer.writerow(["id", "name", "phone", "vehicle"])
+        customer_writer.writerows(customer_rows)
+        zip_file.writestr("customers_export.csv", customer_csv_content.getvalue())
+        
+        # Add bookings CSV
+        bookings = get_admin_bookings()
+        booking_rows = [
+            [
+                _normalize_csv_value(booking.get("booking_id", "")),
+                _normalize_csv_value(booking.get("customer_id", "")),
+                _normalize_csv_value(booking.get("name", "")),
+                _normalize_csv_value(booking.get("phone", "")),
+                _normalize_csv_value(booking.get("vehicle", "")),
+                _normalize_csv_value(booking.get("service", "")),
+                _format_csv_date(booking.get("date", "")),
+                _normalize_csv_value(booking.get("status", "")),
+                _format_csv_datetime(booking.get("created_at", "")),
+            ]
+            for booking in bookings
+        ]
+        bookings_csv_content = StringIO()
+        bookings_writer = csv.writer(bookings_csv_content, quoting=csv.QUOTE_ALL)
+        bookings_writer.writerow(["booking_id", "customer_id", "name", "phone", "vehicle", "service", "date", "status", "created_at"])
+        bookings_writer.writerows(booking_rows)
+        zip_file.writestr("bookings_export.csv", bookings_csv_content.getvalue())
+    
+    zip_buffer.seek(0)
+    return Response(
+        zip_buffer.getvalue(),
+        mimetype="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="admin_data_export.zip"'}
+    )
 
 
 @admin_bp.route("/checkin", methods=["GET", "POST"])
