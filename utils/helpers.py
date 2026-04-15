@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 from utils.constants import (
     STATUS_APPROVED,
-    STATUS_CHECKED_IN,
+    STATUS_IN_GARAGE,
     STATUS_COMPLETED,
     STATUS_PENDING,
     STATUS_REJECTED,
@@ -13,7 +13,7 @@ def get_status_display(status):
     status_map = {
         STATUS_PENDING: "Waiting for Approval",
         STATUS_APPROVED: "Approved",
-        STATUS_CHECKED_IN: "In Progress",
+        STATUS_IN_GARAGE: "In Progress",
         STATUS_REJECTED: "Rejected",
         STATUS_COMPLETED: "Completed",
     }
@@ -62,12 +62,11 @@ def format_datetime_display(value):
     return parsed.strftime("%d-%m-%Y %H:%M")
 
 
-def log_action(action: str, details: str):
-    """Log action to logs.txt: [DATE TIME] ACTION - details"""
+def log_action(action: str, details: str, performed_by=None):
     from pathlib import Path
-    log_file = Path(__file__).parent.parent / "logs.txt"  # project root
+    log_file = Path(__file__).parent.parent / "logs.txt"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-    log_entry = f"[{timestamp}] {action.upper()} - {details}\n"
+    log_entry = f"[{timestamp}] {action.upper()} - {details}{' | by ' + performed_by if performed_by else ''}\n"
     log_file.parent.mkdir(exist_ok=True)
     with open(log_file, "a", encoding="utf-8") as f:
         f.write(log_entry)

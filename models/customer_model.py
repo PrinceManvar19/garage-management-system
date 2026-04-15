@@ -23,6 +23,15 @@ def find_customer(name, phone, vehicle):
     return dict(row) if row else None
 
 
+def get_customer_by_phone(phone):
+    normalized_phone = phone.strip()
+    row = get_db().execute(
+        "SELECT id, name, phone, vehicle FROM customers WHERE phone = ?",
+        (normalized_phone,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
 def get_customer_map():
     rows = get_db().execute("SELECT id, name, phone, vehicle FROM customers").fetchall()
     return {row["id"]: dict(row) for row in rows}

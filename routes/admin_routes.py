@@ -3,7 +3,7 @@ from datetime import datetime
 from io import StringIO
 from urllib.parse import quote
 
-from flask import Blueprint, Response, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, jsonify, Response, flash, redirect, render_template, request, session, url_for
 
 from services.booking_service import (
     approve_booking as approve_booking_service,
@@ -19,9 +19,9 @@ from services.booking_service import (
     reject_booking as reject_booking_service,
 )
 from services.slot_service import get_slots_for_admin, set_slot_total
-from utils.constants import STATUS_APPROVED, STATUS_CHECKED_IN, STATUS_COMPLETED, STATUS_PENDING, STATUS_REJECTED
-from models.customer_model import get_customer_map
-from utils.helpers import format_date_display, format_datetime_display, get_today_date_string
+from utils.constants import STATUS_APPROVED, STATUS_IN_GARAGE, STATUS_COMPLETED, STATUS_PENDING, STATUS_REJECTED
+from models.customer_model import get_customer_by_phone, get_customer_by_id, get_customer_map
+from utils.helpers import format_date_display, format_datetime_display, get_today_date_string, log_action
 
 
 admin_bp = Blueprint("admin", __name__)
@@ -35,7 +35,7 @@ def _build_whatsapp_message(booking):
     status_labels = {
         STATUS_PENDING: "Pending",
         STATUS_APPROVED: "Approved",
-        STATUS_CHECKED_IN: "Checked-In",
+        STATUS_IN_GARAGE: "Checked-In",
         STATUS_REJECTED: "Rejected",
         STATUS_COMPLETED: "Completed",
     }
@@ -79,11 +79,7 @@ def _format_csv_datetime(value):
     return _normalize_csv_value(format_datetime_display(value))
 
 
-def _render_admin_dashboard(
-    filters=None,
-    booking_data=None,
-    checkin_booking_id="",
-):
+def _render_admin_dashboard(filters=None, booking_data=None, checkin_booking_id=""):
     filters = filters or {
         "query": request.args.get("query", ""),
         "date": request.args.get("date", ""),
@@ -91,9 +87,10 @@ def _render_admin_dashboard(
     }
     today = get_today_date_string()
     all_bookings = get_admin_bookings()
+    today_approved = [b for b in all_bookings if b["status"] == "approved" and b["date"] == today]
     bookings = get_admin_bookings(filters)
     stats = get_booking_stats(all_bookings)
-    vehicles_in_garage = [booking for booking in all_bookings if booking.get("status") == STATUS_CHECKED_IN]
+    vehicles_in_garage = [booking for booking in all_bookings if booking.get("status") == STATUS_IN_GARAGE]
     slots = {
         date: {
             **slot,
@@ -112,6 +109,7 @@ def _render_admin_dashboard(
         approved_count=stats["approved"],
         completed_count=stats["completed"],
         rejected_count=stats["rejected"],
+        today_approved=today_approved,
         filters=filters,
         today=today,
         today_display=format_date_display(today),
@@ -191,7 +189,7 @@ def export_garage():
     if not _require_admin():
         return redirect(url_for("main.home"))
 
-    bookings = [booking for booking in get_admin_bookings() if booking.get("status") == STATUS_CHECKED_IN]
+    bookings = [booking for booking in get_admin_bookings() if booking.get("status") == STATUS_IN_GARAGE]
     rows = [
         [
             _normalize_csv_value(booking.get("booking_id", "")),
@@ -291,7 +289,7 @@ def send_booking_whatsapp(booking_id):
         flash("Booking not found", "danger")
         return redirect(url_for("admin.admin_dashboard"))
 
-    if booking.get("status") not in {STATUS_PENDING, STATUS_APPROVED, STATUS_CHECKED_IN, STATUS_REJECTED, STATUS_COMPLETED}:
+    if booking.get("status") not in {STATUS_PENDING, STATUS_APPROVED, STATUS_IN_GARAGE, STATUS_REJECTED, STATUS_COMPLETED}:
         flash("WhatsApp is not available for this booking", "danger")
         return redirect(url_for("admin.admin_dashboard"))
 
@@ -317,27 +315,24 @@ def export_data():
     import zipfile
     from io import BytesIO
 
-    # Create ZIP in memory
     zip_buffer = BytesIO()
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        
-        # Add customers CSV
         customer_map = get_customer_map()
-        customer_rows = []
-        for cust_id, customer in customer_map.items():
-            customer_rows.append([
+        customer_rows = [
+            [
                 _normalize_csv_value(customer.get("id")),
                 _normalize_csv_value(customer.get("name")),
                 _normalize_csv_value(customer.get("phone")),
                 _normalize_csv_value(customer.get("vehicle")),
-            ])
+            ]
+            for customer in customer_map.values()
+        ]
         customer_csv_content = StringIO()
         customer_writer = csv.writer(customer_csv_content, quoting=csv.QUOTE_ALL)
         customer_writer.writerow(["id", "name", "phone", "vehicle"])
         customer_writer.writerows(customer_rows)
         zip_file.writestr("customers_export.csv", customer_csv_content.getvalue())
-        
-        # Add bookings CSV
+
         bookings = get_admin_bookings()
         booking_rows = [
             [
@@ -358,7 +353,7 @@ def export_data():
         bookings_writer.writerow(["booking_id", "customer_id", "name", "phone", "vehicle", "service", "date", "status", "created_at"])
         bookings_writer.writerows(booking_rows)
         zip_file.writestr("bookings_export.csv", bookings_csv_content.getvalue())
-    
+
     zip_buffer.seek(0)
     return Response(
         zip_buffer.getvalue(),
@@ -411,13 +406,7 @@ def checkin():
                 flash("Please fill all manual entry fields", "danger")
             else:
                 success, message, booking = create_manual_booking_with_customer(
-                    customer_id,
-                    name,
-                    phone,
-                    vehicle,
-                    brand_model,
-                    service,
-                    today,
+                    customer_id, name, phone, vehicle, brand_model, service, today,
                 )
                 if not success:
                     flash(message, "danger")
@@ -425,7 +414,7 @@ def checkin():
                     verified_booking = enrich_booking(booking)
                     flash(f'Walk-in vehicle added to garage as {booking["booking_id"]}', "success")
 
-    vehicles_in_garage = [booking for booking in get_admin_bookings() if booking.get("status") == STATUS_CHECKED_IN]
+    vehicles_in_garage = [booking for booking in get_admin_bookings() if booking.get("status") == STATUS_IN_GARAGE]
     return render_template(
         "checkin.html",
         today=today,
@@ -435,24 +424,61 @@ def checkin():
     )
 
 
+@admin_bp.route("/admin/find-customer")
+def find_customer():
+    if not _require_admin():
+        return jsonify({"error": "unauthorized"}), 403
+
+    phone = normalize_phone(request.args.get("phone", "").strip())
+    customer = get_customer_by_phone(phone)
+    if customer:
+        return jsonify({
+            "found": True,
+            "name": customer.get("name", ""),
+            "vehicle": customer.get("vehicle", ""),
+            "phone": customer.get("phone", ""),
+            "customer_id": customer.get("id", "")
+        })
+    return jsonify({"found": False})
+
+
+@admin_bp.route("/admin/find-customer-by-id")
+def find_customer_by_id():
+    if not _require_admin():
+        return jsonify({"error": "unauthorized"}), 403
+
+    customer_id = request.args.get("customer_id", "").strip().upper()
+    customer = get_customer_by_id(customer_id)
+    if customer:
+        return jsonify({
+            "found": True,
+            "name": customer.get("name", ""),
+            "phone": customer.get("phone", ""),
+            "vehicle": customer.get("vehicle", "")
+        })
+    return jsonify({"found": False})
+
+
 @admin_bp.route("/admin/complete/<booking_id>")
 def complete_booking(booking_id):
     if not _require_admin():
         return redirect(url_for("main.home"))
 
+    admin_id = session.get("user", {}).get("id", "unknown")
     booking = get_booking_by_id(booking_id)
     if not booking:
         flash("Booking not found", "error")
         return redirect(url_for("admin.admin_dashboard"))
 
-    if booking.get("status") != STATUS_CHECKED_IN:
+    if booking.get("status") != STATUS_IN_GARAGE:
         flash("Only checked-in vehicles can be marked complete", "danger")
         return redirect(url_for("admin.admin_dashboard"))
 
-    success, message, _updated_booking = complete_booking_by_id(booking_id)
+    success, message, _updated_booking = complete_booking_by_id(booking_id, performed_by=admin_id)
     if not success:
         flash(message, "error")
         return redirect(url_for("admin.admin_dashboard"))
 
+    log_action("COMPLETED", booking_id, performed_by=admin_id)
     flash("Vehicle marked completed", "success")
     return redirect(url_for("admin.admin_dashboard"))

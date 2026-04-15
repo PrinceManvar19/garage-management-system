@@ -1,5 +1,5 @@
 from models.db import get_db
-from utils.constants import ACTIVE_SLOT_STATUSES, STATUS_CHECKED_IN
+from utils.constants import ACTIVE_SLOT_STATUSES, STATUS_IN_GARAGE
 
 
 BOOKING_COLUMNS = """
@@ -14,7 +14,7 @@ def row_to_booking(row):
     booking["phone"] = booking.get("phone") or ""
     booking["brand_model"] = booking.get("brand_model") or ""
     booking["whatsapp_sent"] = int(booking.get("whatsapp_sent") or 0)
-    booking["checked_in"] = booking.get("status") == STATUS_CHECKED_IN
+    booking["checked_in"] = booking.get("status") == STATUS_IN_GARAGE
     booking["is_manual"] = not bool(booking.get("customer_id"))
     return booking
 

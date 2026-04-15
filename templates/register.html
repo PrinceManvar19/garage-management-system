@@ -1,92 +1,38 @@
 {% extends 'base.html' %}
 
-{% block title %}Register - BikeCare{% endblock %}
+{% block title %}Login - Shreeji Auto Services{% endblock %}
 
 {% block content %}
-<section class="hero-section" style="background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-card) 100%); padding: 120px 0;">
-  <div class="container">
-    <div class="row justify-content-center">
-      <div class="col-lg-5">
-        <div class="text-center mb-5">
-          <i class="fas fa-user-plus fa-4x text-primary mb-4" style="color: var(--accent-primary);"></i>
-          <h1 class="h2 fw-bold mb-3">Create Account</h1>
-          <p class="lead text-secondary">Get your Customer ID in 30 seconds</p>
-        </div>
+<div class="auth-wrapper">
+  <div class="auth-card">
+    <img src="{{ url_for('static', filename='images/logo1.png') }}"
+         class="auth-logo"
+         alt="Logo">
 
-        <div class="card glass p-5">
-          <form id="registerForm">
-            <div class="mb-4">
-              <label class="form-label fw-bold mb-3 d-block">Full Name *</label>
-              <div class="input-group">
-                <span class="input-group-text bg-transparent border-end-0">
-                  <i class="fas fa-user text-secondary"></i>
-                </span>
-                <input type="text" class="form-control border-start-0 bg-transparent text-white shadow-none" 
-                       id="regName" placeholder="John Doe" required>
-              </div>
-            </div>
+    <h2 class="auth-title">
+      Create Account at <span>Shreeji</span>
+    </h2>
 
-            <div class="mb-4">
-              <label class="form-label fw-bold mb-3 d-block">Phone Number *</label>
-              <div class="input-group">
-                <span class="input-group-text bg-transparent border-end-0">
-                  <i class="fas fa-phone text-secondary"></i>
-                </span>
-                <input type="tel" class="form-control border-start-0 bg-transparent text-white shadow-none" 
-                       id="regPhone" placeholder="9876543210" required>
-              </div>
-            </div>
+    <p class="auth-subtitle">
+      Get your Customer ID in 30 seconds to book services
+    </p>
 
-            <div id="regError" class="alert alert-warning d-none mb-4" role="alert">
-              <i class="fas fa-exclamation-triangle me-2"></i>
-              <span id="regErrorMsg"></span>
-            </div>
+    <form method="POST" action="/register" class="auth-form">
+      <label class="form-label" for="regName">Full Name *</label>
+      <input type="text" class="form-control auth-input" id="regName" name="name" placeholder="Rahul Patel" required>
 
-            <button type="submit" class="btn w-100 py-3 fw-bold" style="background: var(--accent-primary); border: none;">
-              <span class="spinner-border spinner-border-sm d-none me-2" id="regSpinner"></span>
-              Create My Account
-            </button>
-          </form>
+      <label class="form-label" for="regPhone">Phone Number *</label>
+      <input type="tel" class="form-control auth-input" id="regPhone" name="phone" placeholder="9876543210" required>
 
-          <div class="text-center mt-5 pt-4 border-top border-secondary border-opacity-25">
-            <p class="text-secondary mb-2">Already have an account?</p>
-<a href="/login" class="btn btn-outline-light w-100 py-2" style="color: #000000e6 !important;">
-              <i class="fas fa-sign-in-alt me-2"></i>Login with Customer ID
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
+      <label class="form-label" for="regVehicle">Vehicle Number *</label>
+      <input type="text" class="form-control auth-input" id="regVehicle" name="vehicle" placeholder="MH 04 XX 1234" required style="text-transform:uppercase;">
+
+      <button type="submit" class="btn btn-primary w-100 auth-btn">
+        Create My Account
+      </button>
+    </form>
+
+    <a href="/login" class="auth-link">Already have account? Login →</a>
   </div>
-</section>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  const registerForm = document.getElementById('registerForm');
-  const regSpinner = document.getElementById('regSpinner');
-  
-  registerForm.addEventListener('submit', function(e) {
-    e.preventDefault();
-    const name = document.getElementById('regName').value.trim();
-    const phone = document.getElementById('regPhone').value.trim();
-    
-    if (!name || !phone) {
-      const errorDiv = document.getElementById('regError');
-      document.getElementById('regErrorMsg').textContent = 'Please fill all fields';
-      errorDiv.classList.remove('d-none');
-      return;
-    }
-    
-    regSpinner.classList.remove('d-none');
-    this.querySelector('button[type="submit"]').disabled = true;
-    
-    setTimeout(() => {
-      alert(`Demo Registration Successful!\nCustomer ID: CUST1011\nName: ${name}\nPhone: ${phone}\nLogin at /login`);
-      regSpinner.classList.add('d-none');
-      this.querySelector('button[type="submit"]').disabled = false;
-      window.location.href = '/login';
-    }, 1200);
-  });
-});
-</script>
+</div>
 {% endblock %}

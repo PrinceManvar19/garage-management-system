@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
 from models.customer_model import find_customer
@@ -26,7 +28,8 @@ def login():
 @auth_bp.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
-        flash("Demo registration: Use existing customer IDs to login.", "success")
+        customer_id = "CUST" + str(int(datetime.now().timestamp()))[-4:]
+        flash(f"Account created! Your ID is {customer_id} — save it to login.")
         return redirect(url_for("auth.login"))
     return render_template("register.html")
 

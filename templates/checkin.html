@@ -88,30 +88,47 @@
     </div>
 
     <div class="dash-card">
-      <h2 class="dash-card-title"><i class="fas fa-user-plus"></i> Manual Entry (Walk-in Customer)</h2>
+<h2 class="dash-card-title"><i class="fas fa-user-plus"></i> Walk-in Customer (Manual Entry)</h2>
 
       <form method="POST" action="/checkin" class="dash-form">
         <input type="hidden" name="action" value="manual_entry" />
-        <div class="dash-form-group">
-          <label>Customer ID (Optional)</label>
-          <input type="text" name="customer_id" placeholder="e.g. CUST1001" style="text-transform:uppercase;" />
-          <small style="color:#64748b;">If provided, name and phone will be taken from the customer record.</small>
+        <div class="dash-form-row">
+          <div class="dash-form-group">
+            <label>Customer ID (optional)</label>
+            <input type="text" id="customer-id-input" name="customer_id" placeholder="e.g. CUST1001" style="text-transform:uppercase;" />
+          </div>
+          <div class="dash-form-group">
+            <button type="button" id="lookup-btn" class="dash-btn-secondary" style="height: fit-content;">Find Customer</button>
+          </div>
+        </div>
+        <div id="customer-badge" style="padding: 0.5rem 0;"></div>
+        <div class="dash-form-row">
+          <div class="dash-form-group">
+            <label>Name</label>
+            <input type="text" id="name-input" name="name" placeholder="Enter customer name" />
+          </div>
+          <div class="dash-form-group">
+            <label>Phone Number</label>
+            <input type="text" id="phone-input" name="phone" placeholder="Enter phone number" />
+          </div>
+        </div>
+        <div class="dash-form-row">
+          <div class="dash-form-group">
+            <label>Vehicle Number</label>
+            <input type="text" id="vehicle-input" name="vehicle" placeholder="Enter vehicle number" required style="text-transform:uppercase;" />
+          </div>
+
         </div>
         <div class="dash-form-group">
-          <label>Name</label>
-          <input type="text" name="name" />
+          <label>Date</label>
+          <input type="date" name="date" value="{{ today }}" />
         </div>
-        <div class="dash-form-group">
-          <label>Phone</label>
-          <input type="text" name="phone" />
-        </div>
-        <div class="dash-form-group">
-          <label>Vehicle</label>
-          <input type="text" name="vehicle" required style="text-transform:uppercase;" />
-        </div>
-        <div class="dash-form-group">
-          <label>Brand/Model</label>
-          <input type="text" name="brand_model" required />
+        <div class="dash-form-row">
+          <div class="dash-form-group">
+            <label>Brand / Model</label>
+            <input type="text" name="brand_model" placeholder="e.g. Hero Splendor" required />
+          </div>
+
         </div>
         <div class="dash-form-group">
           <label>Service</label>
@@ -122,8 +139,8 @@
             <option value="Washing">Washing</option>
           </select>
         </div>
-        <button type="submit" class="dash-btn-primary">
-          <i class="fas fa-plus-circle"></i> Add to Garage
+        <button type="submit" class="dash-btn-primary w-full md:w-auto mt-4 px-8 py-3 font-semibold shadow-lg hover:shadow-xl transition-all">
+          <i class="fas fa-plus-circle mr-2"></i>Add to Garage
         </button>
       </form>
     </div>
@@ -170,6 +187,38 @@
 
 {% block extra_scripts %}
 <script>
+  document.getElementById('lookup-btn').addEventListener('click', function() {
+    const custId = document.getElementById('customer-id-input').value.trim();
+    const phone = document.getElementById('phone-input').value.trim();
+    const badge = document.getElementById('customer-badge');
+
+    let url = '';
+    if (custId) {
+      url = '/admin/find-customer-by-id?customer_id=' + encodeURIComponent(custId);
+    } else if (phone) {
+      url = '/admin/find-customer?phone=' + encodeURIComponent(phone);
+    } else {
+      badge.innerHTML = '<span style="color:orange;">Enter a Customer ID or Phone number first.</span>';
+      return;
+    }
+
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        if (data.found) {
+          if (data.name) document.getElementById('name-input').value = data.name;
+          if (data.phone) document.getElementById('phone-input').value = data.phone;
+          if (data.vehicle) document.getElementById('vehicle-input').value = data.vehicle;
+          badge.innerHTML = '<span style="color:green;">✔ Existing Customer Found</span>';
+        } else {
+          badge.innerHTML = '<span style="color:grey;">◉ New Walk-in — will be created</span>';
+        }
+      })
+      .catch(() => {
+        badge.innerHTML = '<span style="color:red;">Lookup failed. Try again.</span>';
+      });
+  });
+
   (function() {
     const storageKey = 'garage_whatsapp_action';
     const trigger = document.querySelector('[data-whatsapp-trigger="true"]');

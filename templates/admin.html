@@ -36,7 +36,8 @@
     </div>
   </div>
 
-<div class="admin-stats">
+  <div class="admin-stats">
+    <!-- # CHANGED: Updated to 4 cards (removed Approved/Rejected, added Today's Appointments) -->
     <div class="admin-stat-card">
       <i class="fas fa-calendar-check"></i>
       <div class="admin-stat-num">{{ total_bookings }}</div>
@@ -48,20 +49,64 @@
       <div class="admin-stat-num">{{ pending_count }}</div>
       <div class="admin-stat-label">Pending</div>
     </div>
-    <div class="admin-stat-card success">
-      <i class="fas fa-check-circle"></i>
-      <div class="admin-stat-num">{{ approved_count }}</div>
-      <div class="admin-stat-label">Approved</div>
-    </div>
+    
     <div class="admin-stat-card info">
       <i class="fas fa-flag-checkered"></i>
       <div class="admin-stat-num">{{ completed_count }}</div>
       <div class="admin-stat-label">Completed</div>
     </div>
-    <div class="admin-stat-card done">
-      <i class="fas fa-times-circle"></i>
-      <div class="admin-stat-num">{{ rejected_count }}</div>
-      <div class="admin-stat-label">Rejected</div>
+    
+    <div class="admin-stat-card" style="cursor:pointer" onclick="toggleArrivalsPanel()">
+      <i class="fas fa-calendar-day"></i>
+      <div class="admin-stat-num">{{ today_approved|length }}</div>
+      <div class="admin-stat-label">Today's Appointments</div>
+    </div>
+  </div>
+
+  <div id="arrivals-panel" style="display:none;">
+    <div class="dash-card">
+      <h2 class="dash-card-title">
+        <i class="fas fa-calendar-day"></i> Today's Appointments
+        <span class="dash-sub" style="font-size:0.85rem; margin-left:0.5rem;">
+          ({{ today_display or today }})
+        </span>
+      </h2>
+      <div class="table-responsive dash-table-wrap">
+        <table class="dash-table">
+          <thead>
+            <tr>
+              <th>Booking ID</th>
+              <th>Customer</th>
+              <th>Vehicle</th>
+              <th>Brand/Model</th>
+              <th>Service</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if today_approved %}
+              {% for b in today_approved %}
+              <tr>
+                <td><strong>{{ b.booking_id }}</strong></td>
+                <td>{{ b.name }}</td>
+                <td>{{ b.vehicle }}</td>
+                <td>{{ b.brand_model or '-' }}</td>
+                <td>{{ b.service }}</td>
+                <td>
+                  <a href="/admin/checkin/{{ b.booking_id }}"
+                     class="btn btn-primary btn-sm loading-btn"
+                     data-loading-text="Checking In...">Check In</a>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="6" class="dash-empty">No appointments for today.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -298,28 +343,25 @@
     </div>
 
     <form method="GET" action="/admin" class="dash-form" style="margin-bottom:1.25rem;">
-      <div class="dash-form-row" style="align-items:flex-end;">
-        <div class="dash-form-group">
-          <label>Search</label>
-          <input type="text" name="query" value="{{ filters.query if filters else '' }}" placeholder="Search by Booking ID / Phone / Vehicle" autofocus />
-        </div>
-        <div class="dash-form-group">
+      <!-- # CHANGED: Restructured filter layout to single clean row (CHANGE 2) -->
+      <div style="display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap; margin-bottom:1.25rem;">
+        <div style="flex:1; min-width:180px;">
           <label>Filter by Date</label>
           <input type="date" name="date" value="{{ filters.date if filters else '' }}" />
         </div>
-        <div class="dash-form-group">
+        <div style="flex:1; min-width:180px;">
           <label>Filter by Status</label>
           <select name="status">
             <option value="">All Statuses</option>
             <option value="pending" {% if filters and filters.status == 'pending' %}selected{% endif %}>Pending</option>
             <option value="approved" {% if filters and filters.status == 'approved' %}selected{% endif %}>Approved</option>
-            <option value="checked_in" {% if filters and filters.status == 'checked_in' %}selected{% endif %}>Checked-In</option>
+            <option value="in_garage" {% if filters and filters.status == 'in_garage' %}selected{% endif %}>In Garage</option>
             <option value="completed" {% if filters and filters.status == 'completed' %}selected{% endif %}>Completed</option>
             <option value="rejected" {% if filters and filters.status == 'rejected' %}selected{% endif %}>Rejected</option>
           </select>
         </div>
-        <div class="dash-form-group" style="flex:0; display:flex; gap:0.75rem;">
-          <button type="submit" class="dash-btn-primary" style="margin-top:0;">
+        <div style="display:flex; gap:0.5rem; align-items:flex-end;">
+          <button type="button" id="apply-btn" class="dash-btn-primary">
             <i class="fas fa-search"></i> Apply
           </button>
           <a href="/admin" class="dash-btn-secondary">
@@ -358,7 +400,7 @@
                 data-raw-date="{{ b.date }}"
                 data-is-today="{% if b.date == today %}true{% else %}false{% endif %}"
                 data-status="{{ b.status }}"
-                data-status-label="{% if b.status == 'pending' %}Pending{% elif b.status == 'approved' %}Approved{% elif b.status == 'checked_in' %}Checked-In{% elif b.status == 'rejected' %}Rejected{% elif b.status == 'completed' %}Completed{% else %}{{ b.status }}{% endif %}">
+                data-status-label="{% if b.status == 'pending' %}Pending{% elif b.status == 'approved' %}Approved{% elif b.status == 'in_garage' %}In Garage{% elif b.status == 'rejected' %}Rejected{% elif b.status == 'completed' %}Completed{% else %}{{ b.status }}{% endif %}">
               <td><strong>{{ b.booking_id }}</strong></td>
               <td>
                 <div>{{ b.name }}</div>
@@ -655,6 +697,12 @@ function toggleExportDropdown() {
       if (form) form.submit();
     }, 300);
   }
+
+function toggleArrivalsPanel() {
+    const panel = document.getElementById('arrivals-panel');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  }
+  // # CHANGED: Added toggleArrivalsPanel JS function (CHANGE 4)
 
   // Init
   (function() {
