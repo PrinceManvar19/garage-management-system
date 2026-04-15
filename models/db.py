@@ -82,6 +82,7 @@ def init_db():
     migrate_bookings_table(db)
     seed_admins(db)
     migrate_json_data()
+    migrate_customers_phone_unique(db)
     db.commit()
 
 
@@ -194,6 +195,34 @@ def migrate_slots_table(db):
         FROM slots_old;
 
         DROP TABLE slots_old;
+        """
+    )
+
+
+# CHANGED: Enforce unique non-empty customer phone numbers for phone-based login.
+def migrate_customers_phone_unique(db):
+    seen_phones = set()
+    rows = db.execute(
+        """
+        SELECT id, phone
+        FROM customers
+        WHERE TRIM(COALESCE(phone, '')) <> ''
+        ORDER BY id ASC
+        """
+    ).fetchall()
+
+    for row in rows:
+        normalized_phone = str(row["phone"] or "").strip()
+        if normalized_phone in seen_phones:
+            db.execute("UPDATE customers SET phone = '' WHERE id = ?", (row["id"],))
+            continue
+        seen_phones.add(normalized_phone)
+
+    db.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_phone_unique
+        ON customers(phone)
+        WHERE phone IS NOT NULL AND phone <> ''
         """
     )
 

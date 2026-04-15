@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Login - Shreeji Auto Services{% endblock %}
+{% block title %}Register - Shreeji Auto Services{% endblock %}
 
 {% block content %}
 <div class="auth-wrapper">
@@ -14,13 +14,14 @@
     </h2>
 
     <p class="auth-subtitle">
-      Get your Customer ID in 30 seconds to book services
+      Register once and use your phone number to login
     </p>
 
     <form method="POST" action="/register" class="auth-form">
       <label class="form-label" for="regName">Full Name *</label>
       <input type="text" class="form-control auth-input" id="regName" name="name" placeholder="Rahul Patel" required>
 
+      <!-- # CHANGED: Phone number is unique and becomes the primary login identifier. -->
       <label class="form-label" for="regPhone">Phone Number *</label>
       <input type="tel" class="form-control auth-input" id="regPhone" name="phone" placeholder="9876543210" required>
 

@@ -1309,6 +1309,28 @@ a  { text-decoration: none; color: inherit; }
 .footer-dot { color: rgba(255,255,255,0.2); }
 .footer-heart { color: var(--accent); }
 
+.flash-container {
+position: fixed;
+top: 20px;
+right: 20px;
+z-index: 999;
+}
+
+.flash {
+padding: 10px 15px;
+margin-bottom: 10px;
+border-radius: 6px;
+color: white;
+}
+
+.flash.success {
+background-color: #28a745;
+}
+
+.flash.error {
+background-color: #dc3545;
+}
+
 @media (max-width: 900px) {
   .trust-bar-inner { flex-wrap: wrap; }
   .trust-item { flex: 1 1 45%; padding: 1rem; }
