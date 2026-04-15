@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import re  # CHANGED: Added for phone normalization
 
 from utils.constants import (
     STATUS_APPROVED,
@@ -7,6 +8,14 @@ from utils.constants import (
     STATUS_PENDING,
     STATUS_REJECTED,
 )
+
+
+def normalize_phone(phone):  # CHANGED: Added per specs - strip non-digits, remove leading 91 if 12 digits, return clean 10-digit
+    normalized = (phone or "").strip()
+    normalized = re.sub(r"\D", "", normalized)  # Strip all non-digits
+    if len(normalized) == 12 and normalized.startswith("91"):
+        normalized = normalized[2:]  # Remove leading 91 if 12 digits
+    return normalized if len(normalized) == 10 else None
 
 
 def get_status_display(status):

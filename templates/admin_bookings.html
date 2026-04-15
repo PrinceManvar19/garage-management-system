@@ -228,7 +228,7 @@
     if (status === 'pending') {
       actions.innerHTML =
         '<a href="/admin/approve/' + bookingId + '" class="dash-btn-primary loading-btn" data-loading-text="Approving..." data-toast="Booking Approved">Approve</a>' +
-        '<a href="/admin/reject/' + bookingId + '" class="dash-btn-secondary booking-modal-danger loading-btn" data-loading-text="Rejecting..." data-toast="Booking Rejected">Reject</a>';
+        '<a href="/admin/reject/' + bookingId + '" class="dash-btn-secondary booking-modal-danger loading-btn" data-loading-text="Rejecting..." data-toast="Booking Rejected" onclick="return confirm(\'Reject this booking? This cannot be undone.\')">Reject</a>';
     } else if (status === 'approved') {
       message.hidden = false;
       message.textContent = 'Use the Check-In column when the vehicle arrives.';

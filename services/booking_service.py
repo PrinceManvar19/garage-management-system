@@ -124,7 +124,17 @@ def _validate_booking_input(customer_id, phone, vehicle, service, date):
     return True, ""
 
 
-def create_booking_for_customer(customer_id, name, phone, vehicle, brand_model, service, date, performed_by=None):
+def create_booking_for_customer(customer_id, name, phone, vehicle, brand_model, service, date, performed_by=None):  # CHANGED: Add duplicate booking check
+    # CHANGED: Duplicate booking check per specs
+    db = get_db()
+    existing = db.execute(
+        "SELECT COUNT(*) FROM bookings WHERE customer_id = ? AND date = ? "
+        "AND status NOT IN ('rejected', 'completed')",
+        (customer_id.strip().upper(), date.strip())
+    ).fetchone()[0]
+    if existing > 0:
+        return False, "You already have a booking on this date.", None
+
     is_valid, message = _validate_booking_input(customer_id, phone, vehicle.strip().upper(), service.strip(), date.strip())
     if not is_valid:
         from utils.helpers import log_action
@@ -174,18 +184,19 @@ def create_booking_for_customer(customer_id, name, phone, vehicle, brand_model, 
     return True, "", booking
 
 
-def create_manual_booking(name, phone, vehicle, brand_model, service, date, performed_by=None):
+def create_manual_booking(name, phone, vehicle, brand_model, service, date, performed_by=None):  # CHANGED: Call normalize_phone()
+    normalized_phone = normalize_phone(phone)  # CHANGED: Normalize per specs before validation
+    if not normalized_phone:
+        return False, "Phone number must be exactly 10 digits.", None
     if not all([name.strip(), vehicle.strip(), brand_model.strip(), service.strip()]):
         return False, "Please fill all manual entry fields.", None
-    if not _validate_phone(phone):
-        return False, "Phone number must be exactly 10 digits.", None
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     booking = {
         "booking_id": generate_unique_booking_id("MANUAL"),
         "customer_id": "",
         "name": name.strip(),
-        "phone": normalize_phone(phone),
+"phone": normalized_phone,  # CHANGED: Use normalized phone
         "vehicle": vehicle.strip().upper(),
         "brand_model": brand_model.strip(),
         "service": service.strip(),
@@ -206,7 +217,7 @@ def create_manual_booking(name, phone, vehicle, brand_model, service, date, perf
     return True, "", booking
 
 
-def create_manual_booking_with_customer(customer_id, name, phone, vehicle, brand_model, service, date):
+def create_manual_booking_with_customer(customer_id, name, phone, vehicle, brand_model, service, date):  # CHANGED: Call normalize_phone()
     normalized_customer_id = (customer_id or "").strip().upper()
     if normalized_customer_id:
         customer = get_customer_by_id(normalized_customer_id)
@@ -215,7 +226,15 @@ def create_manual_booking_with_customer(customer_id, name, phone, vehicle, brand
             log_action("WALKIN CUSTOMER NOT FOUND", f"{customer_id}")
             return False, "Customer ID was not found.", None
         name = customer.get("name", name)
-        phone = customer.get("phone", phone)
+        normalized_phone = normalize_phone(customer.get("phone", phone))  # CHANGED: Normalize phone
+        if not normalized_phone:
+            return False, "Customer phone invalid", None
+        phone = normalized_phone
+    else:
+        normalized_phone = normalize_phone(phone)
+        if not normalized_phone:
+            return False, "Phone number must be exactly 10 digits.", None
+        phone = normalized_phone
 
     return create_manual_booking(name, phone, vehicle, brand_model, service, date)
 

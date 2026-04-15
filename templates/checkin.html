@@ -351,10 +351,11 @@
             {% endif %}
           {% elif booking.status == 'in_garage' %}
             <span class="status-badge status-in_service">Already checked in</span>
-            <a href="/admin/complete/{{ booking.booking_id }}"
+<a href="/admin/complete/{{ booking.booking_id }}"
                class="btn btn-sm"
                style="background:#f59e0b;color:#fff;"
-               data-loading-text="Completing...">
+               data-loading-text="Completing..."
+               onclick="return confirm('Mark this service as complete?')">
               Mark Complete
             </a>
           {% elif booking.status == 'completed' %}
@@ -478,12 +479,13 @@
                       Send WhatsApp
                     </a>
                   {% endif %}
-                  <a href="/admin/complete/{{ b.booking_id }}"
+<a href="/admin/complete/{{ b.booking_id }}"
                      class="btn btn-primary btn-sm action-btn-compact"
                      data-whatsapp-trigger="true"
                      data-booking-id="{{ b.booking_id }}"
                      data-action="completed"
-                     data-loading-text="Completing...">
+                     data-loading-text="Completing..."
+                     onclick="return confirm('Mark this service as complete?')">
                     Mark Complete
                   </a>
                 </div>
