@@ -1,0 +1,242 @@
+{% extends "admin_base.html" %}
+{% block title %}Walk-in Entry - Shreeji Auto Services{% endblock %}
+
+{% block content %}
+<!-- # CHANGED: Walk-in Entry is now a standalone admin page with lookup and inline registration. -->
+<div class="dashboard-wrap">
+  <div class="dash-header">
+    <div>
+      <h1 class="dash-title">
+        <i class="fas fa-motorcycle"></i> Walk-in Entry
+      </h1>
+      <p class="dash-sub">Find returning customers or register new walk-ins before adding them to the garage.</p>
+    </div>
+  </div>
+
+  <div class="dash-card">
+    <h2 class="dash-card-title"><i class="fas fa-search"></i> Customer Lookup</h2>
+    <div class="dash-form">
+      <div class="dash-form-row" style="align-items:flex-end;">
+        <div class="dash-form-group">
+          <label>Search Customer</label>
+          <input type="text"
+                 id="customer-search-input"
+                 placeholder="Search by Phone / Vehicle Number / Customer ID"
+                 style="text-transform:uppercase;" />
+        </div>
+        <div class="dash-form-group" style="flex:0;">
+          <button type="button" id="customer-search-btn" class="dash-btn-primary" style="margin-top:0;">
+            <i class="fas fa-search"></i> Search
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="customer-badge" style="padding: 0.75rem 0;"></div>
+    <div id="customer-search-results" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;"></div>
+    <div id="customer-not-found" class="dash-alert dash-alert-error" style="display:none;margin-top:1rem;">
+      <span>No customer found. Would you like to register them?</span>
+      <button type="button" id="show-register-customer" class="dash-btn-secondary" style="margin-left:auto;">
+        Register New Customer
+      </button>
+    </div>
+  </div>
+
+  <div class="dash-card" id="register-customer-section" style="display:none;">
+    <h2 class="dash-card-title"><i class="fas fa-user-plus"></i> Register New Customer</h2>
+    <form id="registerCustomerForm" class="dash-form">
+      <div class="dash-form-row">
+        <div class="dash-form-group">
+          <label>Name</label>
+          <input type="text" name="name" id="register-name-input" placeholder="Enter customer name" required />
+        </div>
+        <div class="dash-form-group">
+          <label>Phone</label>
+          <input type="text" name="phone" id="register-phone-input" placeholder="Enter phone number" required />
+        </div>
+      </div>
+      <div class="dash-form-group">
+        <label>Vehicle Number</label>
+        <input type="text" name="vehicle" id="register-vehicle-input" placeholder="Enter vehicle number" required style="text-transform:uppercase;" />
+      </div>
+      <button type="submit" class="dash-btn-primary">
+        <i class="fas fa-save"></i> Save Customer
+      </button>
+      <p class="booking-modal-message" id="register-customer-result" hidden></p>
+    </form>
+  </div>
+
+  <div class="dash-card">
+    <h2 class="dash-card-title"><i class="fas fa-user-plus"></i> Walk-in Entry Form</h2>
+
+    <form method="POST" action="/admin/walkin" class="dash-form">
+      <input type="hidden" name="customer_id" id="customer-id-input" />
+      <div class="dash-form-row">
+        <div class="dash-form-group">
+          <label>Name</label>
+          <input type="text" id="name-input" name="name" placeholder="Enter customer name" />
+        </div>
+        <div class="dash-form-group">
+          <label>Phone Number</label>
+          <input type="text" id="phone-input" name="phone" placeholder="Enter phone number" />
+        </div>
+      </div>
+      <div class="dash-form-row">
+        <div class="dash-form-group">
+          <label>Vehicle Number</label>
+          <input type="text" id="vehicle-input" name="vehicle" placeholder="Enter vehicle number" required style="text-transform:uppercase;" />
+        </div>
+        <div class="dash-form-group">
+          <label>Date</label>
+          <input type="date" name="date" value="{{ today }}" />
+        </div>
+      </div>
+      <div class="dash-form-row">
+        <div class="dash-form-group">
+          <label>Brand / Model</label>
+          <input type="text" name="brand_model" placeholder="e.g. Hero Splendor" required />
+        </div>
+        <div class="dash-form-group">
+          <label>Service Type</label>
+          <select name="service" required>
+            <option value="">Select Service</option>
+            <option value="Full Service">Full Service</option>
+            <option value="Engine Work">Engine Work</option>
+            <option value="Washing">Washing</option>
+          </select>
+        </div>
+      </div>
+      <button type="submit" class="dash-btn-primary w-full md:w-auto mt-4 px-8 py-3 font-semibold shadow-lg hover:shadow-xl transition-all">
+        <i class="fas fa-plus-circle mr-2"></i>Add to Garage
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  const searchInput = document.getElementById('customer-search-input');
+  const searchButton = document.getElementById('customer-search-btn');
+  const searchResults = document.getElementById('customer-search-results');
+  const notFound = document.getElementById('customer-not-found');
+  const customerBadge = document.getElementById('customer-badge');
+  const registerSection = document.getElementById('register-customer-section');
+  const registerButton = document.getElementById('show-register-customer');
+  const registerForm = document.getElementById('registerCustomerForm');
+  const registerResult = document.getElementById('register-customer-result');
+
+  function setCustomerBadge(message, tone) {
+    customerBadge.innerHTML = '<span style="color:' + (tone === 'success' ? 'green' : tone === 'error' ? 'red' : 'grey') + ';font-weight:700;">' + message + '</span>';
+  }
+
+  function fillWalkinForm(customer) {
+    document.getElementById('customer-id-input').value = customer.customer_id || '';
+    document.getElementById('name-input').value = customer.name || '';
+    document.getElementById('phone-input').value = customer.phone || '';
+    document.getElementById('vehicle-input').value = customer.vehicle || '';
+    setCustomerBadge('Customer Found', 'success');
+  }
+
+  function renderCustomerCards(customers) {
+    searchResults.innerHTML = '';
+    customers.forEach(function(customer) {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'dash-card';
+      card.style.textAlign = 'left';
+      card.style.padding = '1rem';
+      card.innerHTML =
+        '<strong>' + customer.name + '</strong>' +
+        '<div class="dash-sub">' + customer.customer_id + '</div>' +
+        '<div>' + customer.phone + '</div>' +
+        '<div>' + customer.vehicle + '</div>';
+      card.addEventListener('click', function() {
+        fillWalkinForm(customer);
+        registerSection.style.display = 'none';
+      });
+      searchResults.appendChild(card);
+    });
+  }
+
+  async function searchCustomer() {
+    const query = searchInput.value.trim();
+    searchResults.innerHTML = '';
+    notFound.style.display = 'none';
+    registerSection.style.display = 'none';
+
+    if (!query) {
+      setCustomerBadge('Enter a phone, vehicle number, or customer ID first.', 'error');
+      return;
+    }
+
+    setCustomerBadge('Searching...', 'default');
+
+    try {
+      const response = await fetch('/admin/search-customer?q=' + encodeURIComponent(query));
+      const customers = await response.json();
+
+      if (!customers.length) {
+        setCustomerBadge('', 'default');
+        notFound.style.display = 'flex';
+        return;
+      }
+
+      renderCustomerCards(customers);
+      setCustomerBadge('Select a matching customer.', 'default');
+    } catch (error) {
+      setCustomerBadge('Lookup failed. Try again.', 'error');
+    }
+  }
+
+  searchButton.addEventListener('click', searchCustomer);
+  searchInput.addEventListener('keydown', function(event) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      searchCustomer();
+    }
+  });
+
+  registerButton.addEventListener('click', function() {
+    registerSection.style.display = 'block';
+    notFound.style.display = 'none';
+    const query = searchInput.value.trim();
+    const looksLikePhone = /^[0-9+\-\s()]+$/.test(query);
+    document.getElementById('register-phone-input').value = looksLikePhone ? query : '';
+    document.getElementById('register-vehicle-input').value = !looksLikePhone && /^[A-Za-z0-9\s-]+$/.test(query) ? query.toUpperCase() : '';
+  });
+
+  registerForm.addEventListener('submit', async function(event) {
+    event.preventDefault();
+    registerResult.hidden = false;
+    registerResult.style.color = '#475569';
+    registerResult.textContent = 'Saving customer...';
+
+    const formData = new FormData(registerForm);
+    const payload = Object.fromEntries(formData.entries());
+
+    try {
+      const response = await fetch('/admin/add-customer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        registerResult.style.color = '#991b1b';
+        registerResult.textContent = data.error || 'Customer could not be saved.';
+        return;
+      }
+
+      fillWalkinForm(data.customer);
+      registerSection.style.display = 'none';
+      registerForm.reset();
+      showToast('Customer saved successfully', 'success');
+    } catch (error) {
+      registerResult.style.color = '#991b1b';
+      registerResult.textContent = 'Customer could not be saved right now.';
+    }
+  });
+</script>
+{% endblock %}

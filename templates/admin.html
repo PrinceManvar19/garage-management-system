@@ -1,3 +1,4 @@
+{# # CHANGED: Old all-in-one admin dashboard archived as an inert template comment during sidebar split.
 {% extends "base.html" %}
 {% block title %}Admin Dashboard - Shreeji Auto Services{% endblock %}
 
@@ -807,4 +808,441 @@ function toggleArrivalsPanel() {
 }
 </style>
 
+{% endblock %}
+#}
+
+{% extends "admin_base.html" %}
+{% block title %}Admin Dashboard - Shreeji Auto Services{% endblock %}
+
+{% block content %}
+<!-- # CHANGED: Dashboard now contains only stats, chart, garage, check-in, and add-customer. -->
+<div class="dashboard-wrap">
+  <div class="dash-header">
+    <div>
+      <h1 class="dash-title">
+        <i class="fas fa-tachometer-alt"></i> Admin Dashboard
+      </h1>
+      <p class="dash-sub">Shreeji Auto Services - Garage Management</p>
+    </div>
+    <!-- # CHANGED: Check-In moved from dashboard header to the admin sidebar. -->
+  </div>
+
+  <div class="admin-stats">
+    <div class="admin-stat-card">
+      <i class="fas fa-calendar-check"></i>
+      <div class="admin-stat-num">{{ total_bookings }}</div>
+      <div class="admin-stat-label">Total Bookings</div>
+    </div>
+
+    <div class="admin-stat-card warn">
+      <i class="fas fa-clock"></i>
+      <div class="admin-stat-num">{{ pending_count }}</div>
+      <div class="admin-stat-label">Pending</div>
+    </div>
+
+    <div class="admin-stat-card info">
+      <i class="fas fa-flag-checkered"></i>
+      <div class="admin-stat-num">{{ completed_count }}</div>
+      <div class="admin-stat-label">Completed</div>
+    </div>
+
+    <div class="admin-stat-card" style="cursor:pointer" onclick="toggleArrivalsPanel()">
+      <i class="fas fa-calendar-day"></i>
+      <div class="admin-stat-num">{{ today_appointments|length }}</div>
+      <div class="admin-stat-label">Today's Appointments</div>
+    </div>
+  </div>
+
+  <div id="arrivals-panel" style="display:none;">
+    <div class="dash-card">
+      <h2 class="dash-card-title">
+        <i class="fas fa-calendar-day"></i> Today's Appointments
+        <span class="dash-sub" style="font-size:0.85rem; margin-left:0.5rem;">
+          ({{ today_display or today }})
+        </span>
+      </h2>
+      <div class="table-responsive dash-table-wrap">
+        <table class="dash-table">
+          <thead>
+            <tr>
+              <th>Booking ID</th>
+              <th>Customer</th>
+              <th>Vehicle</th>
+              <th>Brand/Model</th>
+              <th>Service</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if today_appointments %}
+              {% for b in today_appointments %}
+              <tr>
+                <td><strong>{{ b.booking_id }}</strong></td>
+                <td>{{ b.name }}</td>
+                <td>{{ b.vehicle }}</td>
+                <td>{{ b.brand_model or '-' }}</td>
+                <td>{{ b.service }}</td>
+                <td>
+                  <a href="/admin/checkin/{{ b.booking_id }}"
+                     class="btn btn-primary btn-sm loading-btn"
+                     data-loading-text="Checking In...">Check In</a>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="6" class="dash-empty">No appointments for today.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="dash-card">
+    <h2 class="dash-card-title">
+      <i class="fas fa-chart-column"></i> Weekly Bookings
+    </h2>
+    <canvas id="weeklyBookingsChart" height="110" aria-label="Weekly bookings bar chart"></canvas>
+  </div>
+
+  <div class="dash-card">
+    <div class="section-header">
+      <h2 class="dash-card-title" style="margin-bottom:0;">
+        <i class="fas fa-warehouse"></i> Vehicles in Garage
+      </h2>
+    </div>
+    <p class="dash-sub" style="margin-top:-0.25rem; margin-bottom:1rem;">
+      Vehicles in Garage: {{ vehicles_in_garage|length }}
+    </p>
+
+    <div class="table-responsive dash-table-wrap">
+      <table class="dash-table">
+        <thead>
+          <tr>
+            <th>Booking ID</th>
+            <th>Customer Name</th>
+            <th>Phone</th>
+            <th>Vehicle Number</th>
+            <th>Brand/Model</th>
+            <th>Service</th>
+            <th>Check-In Time</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if vehicles_in_garage %}
+            {% for b in vehicles_in_garage %}
+            {% set booking = b %}
+            <tr>
+              <td><strong>{{ b.booking_id }}</strong></td>
+              <td>{{ b.name }}</td>
+              <td>{{ b.phone or '-' }}</td>
+              <td>{{ b.vehicle }}</td>
+              <td>{{ b.brand_model or '-' }}</td>
+              <td>{{ b.service }}</td>
+              <td>{{ b.formatted_checked_in_at or b.checked_in_at or '-' }}</td>
+              <td>
+                {% if booking.phone %}
+                  {% set message =
+                  "Hello " ~ booking.name ~ "\n\n" ~
+                  "Booking ID: " ~ booking.booking_id ~ "\n" ~
+                  "Service Type: " ~ booking.service ~ "\n" ~
+                  "Vehicle Number: " ~ booking.vehicle ~ "\n" ~
+                  "Date: " ~ booking.date ~ "\n" ~
+                  "Status: Completed\n\n" ~
+                  "Your vehicle service is completed. You may collect your vehicle.\n\n" ~
+                  "Thank you - Shreeji Auto Services"
+                  %}
+                  <a target="_blank"
+                     class="btn btn-success btn-sm"
+                     data-whatsapp-button="true"
+                     data-booking-id="{{ booking.booking_id }}"
+                     data-action="completed"
+                     style="display:none;"
+                     href="https://wa.me/{{ '91' ~ booking.phone }}?text={{ message|urlencode }}">
+                    Send WhatsApp
+                  </a>
+                {% endif %}
+                <a href="/admin/complete/{{ b.booking_id }}"
+                   class="btn btn-primary btn-sm loading-btn"
+                   data-whatsapp-trigger="true"
+                   data-booking-id="{{ b.booking_id }}"
+                   data-action="completed"
+                   data-loading-text="Completing...">Mark Complete</a>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="8" class="dash-empty">No active vehicles in the garage.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="dash-card">
+    <h2 class="dash-card-title">
+      <i class="fas fa-id-card"></i> Check-In Section
+    </h2>
+
+    <form method="POST" action="/admin/checkin/verify" class="dash-form">
+      <div class="dash-form-row" style="align-items:flex-end;">
+        <div class="dash-form-group">
+          <label>Booking ID</label>
+          <input type="text"
+                 name="booking_id"
+                 value="{{ checkin_booking_id or '' }}"
+                 placeholder="e.g. BOOK1001"
+                 required
+                 style="text-transform:uppercase;letter-spacing:0.04em;" />
+        </div>
+        <div class="dash-form-group" style="flex:0;">
+          <button type="submit" class="dash-btn-primary loading-btn" data-loading-text="Fetching..." style="margin-top:0;">
+            <i class="fas fa-search"></i> Fetch Booking
+          </button>
+        </div>
+      </div>
+    </form>
+
+    {% if booking_data %}
+      {% set booking = booking_data %}
+      <div class="checkin-booking-card">
+        <h3 class="dash-card-title"><i class="fas fa-clipboard-check"></i> Booking Details</h3>
+        <div class="checkin-booking-grid">
+          <div><strong>Name:</strong> {{ booking.name }}</div>
+          <div><strong>Phone:</strong> {{ booking.phone or '-' }}</div>
+          <div><strong>Vehicle:</strong> {{ booking.vehicle }}</div>
+          <div><strong>Service:</strong> {{ booking.service }}</div>
+          <div><strong>Date:</strong> {{ booking.formatted_date or booking.date }}</div>
+          <div><strong>Status:</strong> {{ booking.status_display or booking.status }}</div>
+        </div>
+
+        {% if booking.date == today and booking.status == 'approved' %}
+          <div style="margin-top:1rem;">
+            <a href="/admin/checkin/{{ booking.booking_id }}"
+               class="dash-btn-primary"
+               data-whatsapp-trigger="true"
+               data-booking-id="{{ booking.booking_id }}"
+               data-action="checked_in"
+               data-loading-text="Checking In...">
+              <i class="fas fa-check-circle"></i> Check-In
+            </a>
+          </div>
+          {% if booking.phone %}
+            {% set message =
+            "Hello " ~ booking.name ~ "%0A%0A" ~
+            "Your vehicle has been received at our garage.%0A" ~
+            "Service is in progress.%0A%0A" ~
+            "We will notify you once ready.%0A%0A" ~
+            "- Shreeji Auto Services"
+            %}
+            <a target="_blank"
+               class="btn btn-success btn-sm"
+               data-whatsapp-button="true"
+               data-booking-id="{{ booking.booking_id }}"
+               data-action="checked_in"
+               data-loading-text="Sending..."
+               data-toast-message="WhatsApp opened"
+               style="display:none;margin-top:1rem;"
+               href="https://wa.me/{{ '91' ~ booking.phone }}?text={{ message }}">
+              WhatsApp
+            </a>
+          {% endif %}
+        {% elif booking.date != today %}
+          <div class="dash-sub" style="margin-top:1rem;">Not scheduled for today</div>
+        {% elif booking.status == 'in_garage' %}
+          <div class="dash-sub" style="margin-top:1rem;">This vehicle is already checked in.</div>
+        {% elif booking.status == 'completed' %}
+          <div class="dash-sub" style="margin-top:1rem;">This booking has already been completed.</div>
+        {% elif booking.status == 'rejected' %}
+          <div class="dash-sub" style="margin-top:1rem;">This booking was rejected and cannot be checked in.</div>
+        {% else %}
+          <div class="dash-sub" style="margin-top:1rem;">This booking must be approved before check-in.</div>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="dash-card">
+    <div class="section-header">
+      <h2 class="dash-card-title" style="margin-bottom:0;">
+        <i class="fas fa-user-plus"></i> Customer Quick Add
+      </h2>
+      <button type="button" class="dash-btn-primary" id="openAddCustomerModal" style="margin-top:0;">
+        <i class="fas fa-plus"></i> Add New Customer
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="booking-modal-backdrop" id="addCustomerModalBackdrop" hidden>
+  <div class="booking-modal" role="dialog" aria-modal="true" aria-labelledby="addCustomerModalTitle">
+    <div class="booking-modal-header">
+      <div>
+        <h3 class="booking-modal-title" id="addCustomerModalTitle">Add New Customer</h3>
+        <p class="booking-modal-subtitle">Save a customer for future lookup.</p>
+      </div>
+      <button type="button" class="booking-modal-close" id="addCustomerModalClose" aria-label="Close add customer modal">
+        <span aria-hidden="true">&times;</span>
+      </button>
+    </div>
+    <div class="booking-modal-body">
+      <form id="addCustomerForm" class="dash-form">
+        <div class="dash-form-group">
+          <label>Name</label>
+          <input type="text" name="name" required placeholder="Customer name" />
+        </div>
+        <div class="dash-form-group">
+          <label>Phone</label>
+          <input type="text" name="phone" required placeholder="10 digit phone number" />
+        </div>
+        <div class="dash-form-group">
+          <label>Vehicle</label>
+          <input type="text" name="vehicle" required placeholder="Vehicle number" style="text-transform:uppercase;" />
+        </div>
+        <button type="submit" class="dash-btn-primary">
+          <i class="fas fa-save"></i> Save Customer
+        </button>
+      </form>
+      <p class="booking-modal-message" id="addCustomerResult" hidden></p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  function toggleArrivalsPanel() {
+    const panel = document.getElementById('arrivals-panel');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  }
+
+  (function() {
+    const chartElement = document.getElementById('weeklyBookingsChart');
+    const weeklyData = {{ last_7_days_data|tojson }};
+
+    if (chartElement) {
+      new Chart(chartElement, {
+        type: 'bar',
+        data: {
+          labels: weeklyData.map(item => item.date),
+          datasets: [{
+            label: 'Bookings',
+            data: weeklyData.map(item => item.count),
+            backgroundColor: 'rgba(162, 4, 5, 0.75)',
+            borderColor: '#a20405',
+            borderWidth: 1,
+            borderRadius: 8
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                precision: 0
+              }
+            }
+          }
+        }
+      });
+    }
+
+    const modalBackdrop = document.getElementById('addCustomerModalBackdrop');
+    const modalClose = document.getElementById('addCustomerModalClose');
+    const openModalButton = document.getElementById('openAddCustomerModal');
+    const addCustomerForm = document.getElementById('addCustomerForm');
+    const addCustomerResult = document.getElementById('addCustomerResult');
+
+    function openAddCustomerModal() {
+      modalBackdrop.hidden = false;
+      document.body.classList.add('modal-open');
+      addCustomerResult.hidden = true;
+      addCustomerResult.textContent = '';
+    }
+
+    function closeAddCustomerModal() {
+      modalBackdrop.hidden = true;
+      document.body.classList.remove('modal-open');
+      addCustomerForm.reset();
+    }
+
+    openModalButton.addEventListener('click', openAddCustomerModal);
+    modalClose.addEventListener('click', closeAddCustomerModal);
+    modalBackdrop.addEventListener('click', function(event) {
+      if (event.target === modalBackdrop) {
+        closeAddCustomerModal();
+      }
+    });
+
+    addCustomerForm.addEventListener('submit', async function(event) {
+      event.preventDefault();
+      addCustomerResult.hidden = false;
+      addCustomerResult.textContent = 'Saving customer...';
+
+      const formData = new FormData(addCustomerForm);
+      const payload = Object.fromEntries(formData.entries());
+
+      try {
+        const response = await fetch('/admin/add-customer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          addCustomerResult.textContent = data.error || 'Customer could not be saved.';
+          addCustomerResult.style.color = '#991b1b';
+          return;
+        }
+
+        addCustomerResult.style.color = '#065f46';
+        addCustomerResult.textContent = 'Customer saved: ' + data.customer.customer_id;
+        showToast('Customer saved successfully', 'success');
+      } catch (error) {
+        addCustomerResult.style.color = '#991b1b';
+        addCustomerResult.textContent = 'Customer could not be saved right now.';
+      }
+    });
+
+    const storageKey = 'garage_whatsapp_action';
+    document.querySelectorAll('[data-whatsapp-trigger="true"]').forEach(function(element) {
+      element.addEventListener('click', function() {
+        localStorage.setItem(storageKey, JSON.stringify({
+          bookingId: element.dataset.bookingId,
+          action: element.dataset.action
+        }));
+      });
+    });
+
+    let storedAction = null;
+    try {
+      storedAction = JSON.parse(localStorage.getItem(storageKey) || 'null');
+    } catch (error) {
+      storedAction = null;
+    }
+
+    if (!storedAction || !storedAction.bookingId || !storedAction.action) {
+      return;
+    }
+
+    const selector = '[data-whatsapp-button="true"][data-booking-id="' + storedAction.bookingId + '"][data-action="' + storedAction.action + '"]';
+    const button = document.querySelector(selector);
+
+    if (button) {
+      button.style.display = 'inline-block';
+      localStorage.removeItem(storageKey);
+    }
+  })();
+</script>
 {% endblock %}
