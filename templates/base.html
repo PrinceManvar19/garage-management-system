@@ -54,13 +54,15 @@
   </nav>
 
   {% with messages = get_flashed_messages(with_categories=true) %}
-  {% if messages %}
-  <div class="flash-container">
-  {% for category, message in messages %}
-  <div class="flash {{ category }}">{{ message }}</div>
-  {% endfor %}
-  </div>
-  {% endif %}
+    {% if messages %}
+      <script>
+        document.addEventListener('DOMContentLoaded', function() {
+          {% for category, message in messages %}
+            showToast("{{ message }}", "{{ category if category != 'message' else 'info' }}");
+          {% endfor %}
+        });
+      </script>
+    {% endif %}
   {% endwith %}
 
   {% with messages = get_flashed_messages(with_categories=true) %}
@@ -238,5 +240,6 @@
     });
   </script>
   {% block extra_scripts %}{% endblock %}
+  <script src="/static/js/toasts.js"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+ {% extends "base.html" %}
 
 {% block title %}Book Service - Shreeji Auto Services{% endblock %}
 
@@ -31,13 +31,44 @@
         </div>
 
         <div class="dash-form-group">
-          <label>Vehicle Number Plate</label>
-          <input type="text" name="vehicle_number" placeholder="GJ01AB1234" required style="text-transform:uppercase;" />
+          <label>Vehicle Number</label>
+          <select id="vehicle-select" name="vehicle_number" required style="text-transform:uppercase;">
+            <option value="">Loading your vehicles...</option>
+          </select>
+          <input type="hidden" id="vehicle-number-hidden" name="vehicle_number" />
         </div>
 
-        <div class="dash-form-group">
+<div id="brand-model-group" class="dash-form-group">
           <label>Brand / Model</label>
-          <input type="text" name="brand_model" placeholder="Honda Activa 6G" required />
+          <input type="text" id="brand-model-input" name="brand_model" placeholder="Brand Model (autofilled)" readonly />
+        </div>
+
+        <div id="new-vehicle-form" class="dash-form-group" style="display:none; margin-top:1rem; padding:1.5rem; border:2px dashed #a20405; border-radius:12px; background:rgba(162,4,5,0.05);">
+          <h4 style="color:#a20405; margin-bottom:1rem; font-size:1.1rem;">
+            <i class="fas fa-plus-circle"></i> Add New Vehicle
+          </h4>
+          <div class="dash-form-row">
+            <div>
+              <label>New Plate Number *</label>
+              <input type="text" id="new-plate" placeholder="GJ01AB1234" style="text-transform:uppercase;" required />
+            </div>
+            <div>
+              <label>New Brand *</label>
+              <input type="text" id="new-brand" placeholder="Honda" required />
+            </div>
+          </div>
+          <div class="dash-form-group">
+            <label>New Model (optional)</label>
+            <input type="text" id="new-model" placeholder="Activa 6G" />
+          </div>
+          <div style="display:flex; gap:1rem;">
+            <button type="button" id="save-new-vehicle" class="dash-btn-primary" style="flex:1;">
+              <i class="fas fa-save"></i> Save Vehicle
+            </button>
+            <button type="button" id="cancel-new-vehicle" class="dash-btn-secondary" style="flex:1;">
+              <i class="fas fa-times"></i> Cancel
+            </button>
+          </div>
         </div>
 
         <div class="dash-form-row">
@@ -65,6 +96,139 @@
           <i class="fas fa-paper-plane"></i> Send Booking Request
         </button>
       </form>
+      
+      <script>
+        // NEW: Vehicle dropdown + brand/model auto-fill logic
+        (function() {
+          const customerPhone = "{{ customer.phone or '' }}";
+          const vehicleSelect = document.getElementById('vehicle-select');
+          const vehicleHidden = document.getElementById('vehicle-number-hidden');
+          const brandModelInput = document.getElementById('brand-model-input');
+          
+          if (!customerPhone) {
+            vehicleSelect.innerHTML = '<option value="">Phone not available</option>';
+            return;
+          }
+          
+          // Fetch vehicles
+          fetch(`/api/vehicles/${customerPhone}`)
+            .then(r => r.json())
+            .then(data => {
+              if (data.vehicles && data.vehicles.length > 0) {
+                vehicleSelect.innerHTML = '<option value="">Select Vehicle</option>';
+                console.log("API vehicles:", data);
+                console.log("Vehicles loaded:", data.vehicles);
+                data.vehicles.forEach(v => {
+                  const opt = new Option(v.plate_number, v.plate_number);
+                  opt.dataset.brand = v.brand || "";
+                  opt.dataset.model = v.model || "";
+                  vehicleSelect.appendChild(opt);
+                });
+                const newOpt = document.createElement("option");
+                newOpt.value = "__new__";
+                newOpt.textContent = "+ Add New Vehicle";
+                vehicleSelect.appendChild(newOpt);
+                
+                // Auto-select if only 1 vehicle
+                if (data.vehicles.length === 1) {
+                  vehicleSelect.value = data.vehicles[0].plate_number;
+                  vehicleSelect.dispatchEvent(new Event('change'));
+                }
+              } else {
+                vehicleSelect.innerHTML = '<option value="__new__">+ Add New Vehicle</option>';
+                vehicleSelect.value = '__new__';
+              }
+            })
+            .catch(() => {
+              vehicleSelect.innerHTML = '<option value="__new__">+ Add New Vehicle (API error)</option>';
+            });
+          
+          // On vehicle change
+          vehicleSelect.addEventListener('change', function() {
+            console.log("Selected:", this.value);
+            const selected = this.value;
+            vehicleHidden.value = selected === '__new__' ? '' : selected;
+            
+            brandModelInput.value = "";
+            brandModelInput.removeAttribute("readonly");
+
+            if (selected === '__new__') {
+              document.getElementById('brand-model-group').style.display = 'none';
+              document.getElementById('new-vehicle-form').style.display = 'block';
+              document.getElementById('new-plate').focus();
+            } else {
+              document.getElementById('new-vehicle-form').style.display = 'none';
+              document.getElementById('brand-model-group').style.display = 'block';
+              document.getElementById('new-vehicle-form').style.display = 'none';
+              document.getElementById('brand-model-group').style.display = 'block';
+              const selectedOption = this.options[this.selectedIndex];
+              const brand = selectedOption.dataset.brand || "";
+              const model = selectedOption.dataset.model || "";
+              brandModelInput.value = (brand + " " + model).trim();
+              brandModelInput.setAttribute('readonly', true);
+              console.log("Selected option:", selectedOption);
+              console.log("Selected vehicle:", {plate: selected, brand, model});
+            }
+          });
+
+          // New vehicle form handlers
+          document.getElementById('save-new-vehicle').addEventListener('click', addNewVehicle);
+          document.getElementById('cancel-new-vehicle').addEventListener('click', function() {
+            document.getElementById('new-vehicle-form').style.display = 'none';
+            document.getElementById('brand-model-group').style.display = 'block';
+            vehicleSelect.value = '';
+            brandModelInput.value = '';
+            vehicleHidden.value = '';
+          });
+
+          async function addNewVehicle() {
+            const plate = document.getElementById('new-plate').value.trim().toUpperCase();
+            const brand = document.getElementById('new-brand').value.trim();
+            const model = document.getElementById('new-model').value.trim() || '';
+
+            console.log("Saving vehicle:", {
+                plate: plate,
+                brand: brand
+            });
+            if (!plate || !brand) {
+              alert('Plate and brand required');
+              return;
+            }
+
+            try {
+              const response = await fetch('/api/vehicles/add', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({plate_number: plate, brand, model})
+              });
+              const data = await response.json();
+              console.log("Response:", data);
+
+              if (data.success) {
+                // Add to dropdown
+                const opt = document.createElement('option');
+                opt.value = data.vehicle.plate_number;
+                opt.textContent = data.vehicle.plate_number;
+                opt.dataset.brand = data.vehicle.brand;
+                opt.dataset.model = data.vehicle.model;
+                vehicleSelect.insertBefore(opt, vehicleSelect.querySelector('option[value="__new__"]'));
+                
+                // Select new vehicle
+                vehicleSelect.value = data.vehicle.plate_number;
+                vehicleSelect.dispatchEvent(new Event('change'));
+                
+                console.log('New vehicle added:', data.vehicle);
+              } else {
+                alert(data.message || data.error || 'Failed to add vehicle');
+              }
+            } catch (error) {
+              console.error('Add vehicle error:', error);
+              alert('Network error - try again');
+            }
+          }
+        })();
+
+      </script>
     </div>
   </div>
 </section>

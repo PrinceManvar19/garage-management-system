@@ -1,11 +1,76 @@
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for, jsonify
+import re
+from models.db import get_db
 
-from models.customer_model import get_customer_by_id
+from models.customer_model import get_customer_by_id, get_customer_by_phone, get_vehicles_by_customer
 from services.booking_service import create_booking_for_customer, get_customer_dashboard_data
 from services.slot_service import get_next_14_days
 
 
 customer_bp = Blueprint("customer", __name__)
+
+
+@customer_bp.route("/api/vehicles/<identifier>")
+def api_vehicles(identifier):
+    """NEW: Public API - customer vehicles by phone/ID - no login required"""
+    vehicles = get_vehicles_by_customer(identifier)
+    return jsonify({"vehicles": vehicles})
+
+
+@customer_bp.route("/api/vehicles/add", methods=["POST"])
+def api_add_vehicle():
+    """NEW: Add new vehicle for logged-in customer"""
+    print("Session:", dict(session))
+    customer_id = session.get("customer_id")
+    if not customer_id:
+        phone = session.get("phone")
+        customer = get_customer_by_phone(phone)
+        if customer:
+            customer_id = customer["id"]
+    
+    if not customer_id:
+        return jsonify({"success": False, "message": "Customer not found"}), 400
+    
+    print("Customer ID:", customer_id)
+    
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "message": "Invalid JSON"}), 400
+
+    plate_number = data.get("plate_number", "").strip().upper()
+    brand = data.get("brand", "").strip()
+    model = data.get("model", "") or ""
+
+    if not plate_number or not re.match(r"^[A-Z0-9\s]{4,10}$", plate_number):
+        return jsonify({"success": False, "message": "Invalid plate number format"}), 400
+
+    if not brand:
+        return jsonify({"success": False, "message": "Brand required"}), 400
+
+    try:
+        db = get_db()
+        cursor = db.execute(
+            """
+            INSERT INTO vehicles (plate_number, customer_id, brand, model)
+            VALUES (?, ?, ?, ?)
+            """,
+            (plate_number, customer_id, brand, model)
+        )
+        db.commit()
+
+        if cursor.rowcount > 0:
+            vehicle = {
+                "plate_number": plate_number,
+                "brand": brand,
+                "model": model
+            }
+            return jsonify({"success": True, "vehicle": vehicle})
+        else:
+            return jsonify({"success": False, "message": "Vehicle already exists"}), 409
+    except Exception as e:
+        db.rollback()
+        print(f"ADD VEHICLE ERROR: {e}")
+        return jsonify({"success": False, "message": "Database error"}), 500
 
 
 @customer_bp.route("/dashboard")

@@ -176,11 +176,11 @@
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       <script>
-        window.__flashMessages = {{ messages|tojson }};
-      </script>
-    {% else %}
-      <script>
-        window.__flashMessages = [];
+        document.addEventListener('DOMContentLoaded', function() {
+          {% for category, message in messages %}
+            showToast("{{ message }}", "{{ category if category != 'message' else 'info' }}");
+          {% endfor %}
+        });
       </script>
     {% endif %}
   {% endwith %}
@@ -301,5 +301,6 @@
     });
   </script>
   {% block extra_scripts %}{% endblock %}
+  <script src="/static/js/toasts.js"></script>
 </body>
 </html>

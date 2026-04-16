@@ -180,6 +180,21 @@ def search_customers(query, limit=5):
     return [dict(row) for row in rows]
 
 
+def get_vehicles_by_customer(identifier):
+    """NEW: Get customer vehicles by phone or customer_id"""
+    customer = get_customer_by_phone_or_id(identifier)
+    if not customer:
+        return []
+    
+    db = get_db()
+    rows = db.execute(
+        "SELECT plate_number, brand, model FROM vehicles WHERE customer_id = ?", 
+        (customer['id'],)
+    ).fetchall()
+    
+    return [dict(row) for row in rows]
+
+
 def get_customer_map():
     rows = get_db().execute("SELECT id, name, phone, vehicle FROM customers").fetchall()
     return {row["id"]: dict(row) for row in rows}

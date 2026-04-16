@@ -83,6 +83,18 @@ def init_db():
     seed_admins(db)
     migrate_json_data()
     migrate_customers_phone_unique(db)
+    
+    # NEW: Vehicles table + migration from customers.vehicle
+    db.executescript("""
+        CREATE TABLE IF NOT EXISTS vehicles (
+            plate_number TEXT PRIMARY KEY,
+            customer_id TEXT NOT NULL,
+            brand TEXT DEFAULT '',
+            model TEXT DEFAULT '',
+            FOREIGN KEY (customer_id) REFERENCES customers(id)
+        );
+    """)
+    migrate_vehicles()
     db.commit()
 
 
@@ -239,6 +251,27 @@ def migrate_bookings_table(db):
             ADD COLUMN whatsapp_sent INTEGER NOT NULL DEFAULT 0
             """
         )
+
+def migrate_vehicles():
+    """NEW: Migrate customers.vehicle → normalized vehicles table"""
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, vehicle FROM customers WHERE vehicle IS NOT NULL AND TRIM(vehicle) <> ''"
+    ).fetchall()
+    
+    for row in rows:
+        plate_number = row["vehicle"].strip().upper()
+        if plate_number:
+            db.execute(
+                """
+                INSERT OR IGNORE INTO vehicles 
+                (plate_number, customer_id, brand, model) 
+                VALUES (?, ?, '', '')
+                """,
+                (plate_number, row["id"])
+            )
+    
+    db.commit()
 
 
 def init_app(app):

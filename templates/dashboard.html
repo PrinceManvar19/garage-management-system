@@ -288,7 +288,10 @@
 
             <div class="mb-3">
               <label for="vehicleNumber" class="form-label fw-bold">Vehicle Number Plate</label>
-              <input type="text" class="form-control" id="vehicleNumber" name="vehicle_number" placeholder="GJ01AB1234" required>
+              <select id="vehicle-select-user" name="vehicle_number" required
+    style="width:100%; padding:10px; border:1px solid #ddd; border-radius:8px; font-size:14px;">
+    <option value="">Loading vehicles...</option>
+</select>
             </div>
 
             <div class="mb-3">
@@ -400,6 +403,69 @@
 
 {% block extra_scripts %}
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+    const customerPhone = "{{ session.get('phone', '') }}";
+    const customerID = "{{ session.get('customer_id', '') }}";
+    const identifier = customerPhone || customerID;
+    const vehicleSelect = document.getElementById('vehicle-select-user');
+    const brandModelInput = document.querySelector('input[name="brand_model"]');
+
+    if (!identifier || !vehicleSelect) return;
+
+    fetch('/api/vehicles/' + encodeURIComponent(identifier))
+        .then(res => res.json())
+        .then(data => {
+            const vehicles = data.vehicles || [];
+            vehicleSelect.innerHTML = '';
+
+            if (vehicles.length === 0) {
+                vehicleSelect.innerHTML = '<option value="">No vehicles found</option>';
+                return;
+            }
+
+            vehicles.forEach(v => {
+                const opt = document.createElement('option');
+                opt.value = v.plate_number;
+                opt.textContent = v.plate_number;
+                opt.setAttribute('data-brand', v.brand);
+                opt.setAttribute('data-model', v.model);
+                vehicleSelect.appendChild(opt);
+            });
+
+            // Add new vehicle option
+            const newOpt = document.createElement('option');
+            newOpt.value = '__new__';
+            newOpt.textContent = '+ Add New Vehicle';
+            vehicleSelect.appendChild(newOpt);
+
+            // Auto-select if only one vehicle
+            if (vehicles.length === 1) {
+                vehicleSelect.selectedIndex = 0;
+                updateBrandModel(vehicleSelect);
+            }
+        })
+        .catch(() => {
+            vehicleSelect.innerHTML = '<option value="">Could not load vehicles</option>';
+        });
+
+    vehicleSelect.addEventListener('change', function() {
+        updateBrandModel(this);
+    });
+
+    function updateBrandModel(selectEl) {
+        if (!brandModelInput) return;
+        if (selectEl.value === '__new__') {
+            brandModelInput.value = '';
+            brandModelInput.removeAttribute('readonly');
+        } else {
+            const opt = selectEl.options[selectEl.selectedIndex];
+            const brand = opt.getAttribute('data-brand') || '';
+            const model = opt.getAttribute('data-model') || '';
+            brandModelInput.value = (brand + ' ' + model).trim();
+            brandModelInput.setAttribute('readonly', true);
+        }
+    }
+});
   const bookingStepCard = document.getElementById('bookingStepCard');
   const bookingForm = document.getElementById('dashboardBookingForm');
   const bookingMessage = document.getElementById('bookingMessage');

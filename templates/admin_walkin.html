@@ -130,11 +130,68 @@
     customerBadge.innerHTML = '<span style="color:' + (tone === 'success' ? 'green' : tone === 'error' ? 'red' : 'grey') + ';font-weight:700;">' + message + '</span>';
   }
 
+  function loadVehiclesForCustomer(identifier) {
+    const vehicleSelect = document.getElementById('vehicle-select-admin');
+    const vehicleInput = document.getElementById('vehicle-input');
+
+    fetch('/api/vehicles/' + encodeURIComponent(identifier))
+        .then(res => {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.json();
+        })
+        .then(data => {
+            console.log("API vehicles:", data);
+            const vehicles = data.vehicles || [];
+            // Build select element
+            let selectHTML = '<select id="vehicle-select-admin" name="vehicle" required onchange="onVehicleSelectAdmin(this)" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;font-size:14px;">';
+            vehicles.forEach(v => {
+                selectHTML += `<option value="${v.plate_number}" data-brand="${v.brand}" data-model="${v.model}">${v.plate_number}</option>`;
+            });
+            selectHTML += '<option value="__new__">+ Add New Vehicle</option>';
+            selectHTML += '</select>';
+
+            // Replace vehicle input with select
+            vehicleInput.outerHTML = selectHTML;
+
+            // Auto-select if only one
+            const newSelect = document.getElementById('vehicle-select-admin');
+            if (vehicles.length === 1) {
+                newSelect.value = vehicles[0].plate_number;
+                onVehicleSelectAdmin(newSelect);
+            }
+        })
+        .catch(err => {
+            console.error('Vehicle fetch error:', err);
+        });
+}
+
+function onVehicleSelectAdmin(selectEl) {
+    const brandModelInput = document.querySelector('input[name="brand_model"]');
+    if (selectEl.value === '__new__') {
+        // Show text input for manual entry
+        selectEl.insertAdjacentHTML('afterend', '<input type="text" id="new-vehicle-input" name="vehicle" placeholder="Enter plate e.g. GJ01AB1234" style="width:100%;padding:8px;margin-top:6px;border:1px solid #ccc;border-radius:6px;" required>');
+        selectEl.removeAttribute('name');
+        if (brandModelInput) { brandModelInput.value = ''; brandModelInput.removeAttribute('readonly'); }
+    } else {
+        console.log("Selected option:", opt);
+        const opt = selectEl.options[selectEl.selectedIndex];
+        const brand = opt.getAttribute('data-brand') || '';
+        const model = opt.getAttribute('data-model') || '';
+        if (brandModelInput) {
+            brandModelInput.value = (brand + ' ' + model).trim();
+        }
+        // Remove manual input if it exists
+        const manualInput = document.getElementById('new-vehicle-input');
+        if (manualInput) manualInput.remove();
+        selectEl.setAttribute('name', 'vehicle');
+    }
+  }
+
   function fillWalkinForm(customer) {
-    document.getElementById('customer-id-input').value = customer.customer_id || '';
+    document.getElementById('customer-id-input').value = customer.customer_id || customer.id || '';
     document.getElementById('name-input').value = customer.name || '';
     document.getElementById('phone-input').value = customer.phone || '';
-    document.getElementById('vehicle-input').value = customer.vehicle || '';
+    loadVehiclesForCustomer(customer.phone || customer.id);
     setCustomerBadge('Customer Found', 'success');
   }
 
