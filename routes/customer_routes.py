@@ -1,5 +1,11 @@
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for, jsonify
 import re
+<<<<<<< HEAD
+=======
+import sqlite3
+
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for, jsonify
+from models.db import get_db
+>>>>>>> main
 
 from models.customer_model import add_vehicle_to_customer, get_customer_by_id, get_customer_by_phone, get_vehicles_by_customer
 from services.booking_service import create_booking_for_customer, get_customer_dashboard_data
@@ -45,12 +51,35 @@ def api_add_vehicle():
         return jsonify({"success": False, "message": "Brand required"}), 400
 
     try:
+<<<<<<< HEAD
         vehicle = add_vehicle_to_customer(customer_id, plate_number, brand, model)
         return jsonify({"success": True, "vehicle": vehicle})
     except ValueError as error:
         return jsonify({"success": False, "message": str(error)}), 400
     except Exception as error:
         log_action("ADD VEHICLE ERROR", str(error))
+=======
+        db = get_db()
+        db.execute(
+            """
+            INSERT INTO vehicles (plate_number, customer_id, brand, model)
+            VALUES (?, ?, ?, ?)
+            """,
+            (plate_number, customer_id, brand, model)
+        )
+        db.commit()
+        vehicle = {
+            "plate_number": plate_number,
+            "brand": brand,
+            "model": model
+        }
+        return jsonify({"success": True, "vehicle": vehicle})
+    except sqlite3.IntegrityError:
+        db.rollback()
+        return jsonify({"success": False, "message": "Vehicle already exists"}), 409
+    except Exception as e:
+        db.rollback()
+>>>>>>> main
         return jsonify({"success": False, "message": "Database error"}), 500
 
 

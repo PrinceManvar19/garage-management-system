@@ -4,7 +4,8 @@ from utils.constants import ACTIVE_SLOT_STATUSES, STATUS_IN_GARAGE
 
 BOOKING_COLUMNS = """
     booking_id, customer_id, name, phone, vehicle, brand_model,
-    service, date, status, created_at, checked_in_at, completed_at, whatsapp_sent
+    service, date, status, created_at, checked_in_at, completed_at, whatsapp_sent,
+    msg_approved_sent, msg_rejected_sent, msg_checkedin_sent, msg_completed_sent
 """
 
 
@@ -14,6 +15,10 @@ def row_to_booking(row):
     booking["phone"] = booking.get("phone") or ""
     booking["brand_model"] = booking.get("brand_model") or ""
     booking["whatsapp_sent"] = int(booking.get("whatsapp_sent") or 0)
+    booking["msg_approved_sent"] = int(booking.get("msg_approved_sent") or 0)
+    booking["msg_rejected_sent"] = int(booking.get("msg_rejected_sent") or 0)
+    booking["msg_checkedin_sent"] = int(booking.get("msg_checkedin_sent") or 0)
+    booking["msg_completed_sent"] = int(booking.get("msg_completed_sent") or 0)
     booking["checked_in"] = booking.get("status") == STATUS_IN_GARAGE
     booking["is_manual"] = not bool(booking.get("customer_id"))
     return booking
@@ -90,9 +95,10 @@ def create_booking(booking):
             """
             INSERT INTO bookings (
                 booking_id, customer_id, name, phone, vehicle, brand_model,
-                service, date, status, created_at, checked_in_at, completed_at, whatsapp_sent
+                service, date, status, created_at, checked_in_at, completed_at, whatsapp_sent,
+                msg_approved_sent, msg_rejected_sent, msg_checkedin_sent, msg_completed_sent
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 booking["booking_id"],
@@ -108,6 +114,10 @@ def create_booking(booking):
                 booking.get("checked_in_at"),
                 booking.get("completed_at"),
                 int(booking.get("whatsapp_sent", 0) or 0),
+                int(booking.get("msg_approved_sent", 0) or 0),
+                int(booking.get("msg_rejected_sent", 0) or 0),
+                int(booking.get("msg_checkedin_sent", 0) or 0),
+                int(booking.get("msg_completed_sent", 0) or 0),
             ),
         )
         from utils.helpers import log_action
@@ -118,23 +128,58 @@ def create_booking(booking):
         raise
 
 
-def update_booking_status(booking_id, status, checked_in_at=None, completed_at=None, whatsapp_sent=None):
+def update_booking_status(booking_id, status, checked_in_at=None, completed_at=None, whatsapp_sent=None, **message_flags):
     try:
         db = get_db()
+        set_clause = "status = ?, checked_in_at = ?, completed_at = ?, whatsapp_sent = COALESCE(?, whatsapp_sent)"
+        params = [status, checked_in_at, completed_at, whatsapp_sent]
+        
+        for flag, value in message_flags.items():
+            if value is not None:
+                set_clause += f", {flag} = COALESCE(?, {flag})"
+                params.append(value)
+        
+        params.append(booking_id)
         db.execute(
-            """
+            f"""
             UPDATE bookings
-            SET status = ?, checked_in_at = ?, completed_at = ?,
-                whatsapp_sent = COALESCE(?, whatsapp_sent)
+            SET {set_clause}
             WHERE booking_id = ?
             """,
-            (status, checked_in_at, completed_at, whatsapp_sent, booking_id),
+            params
         )
         from utils.helpers import log_action
         log_action("STATUS UPDATED", f"{booking_id} to {status}")
     except Exception as e:
         from utils.helpers import log_action
         log_action("DB ERROR UPDATE STATUS", f"{booking_id} - {str(e)}")
+        raise
+
+
+def update_message_flags(booking_id, **flags):
+    """Update specific message flags"""
+    try:
+        db = get_db()
+        set_parts = []
+        params = []
+        for flag, value in flags.items():
+            if value is not None:
+                set_parts.append(f"{flag} = ?")
+                params.append(int(value))
+        params.append(booking_id)
+        
+        if set_parts:
+            db.execute(
+                f"""
+                UPDATE bookings
+                SET {', '.join(set_parts)}
+                WHERE booking_id = ?
+                """,
+                params
+            )
+    except Exception as e:
+        from utils.helpers import log_action
+        log_action("DB ERROR UPDATE MSG FLAGS", f"{booking_id} - {str(e)}")
         raise
 
 

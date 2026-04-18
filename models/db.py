@@ -64,7 +64,11 @@ def init_db():
             created_at TEXT,
             checked_in_at TEXT,
             completed_at TEXT,
-            whatsapp_sent INTEGER NOT NULL DEFAULT 0
+            whatsapp_sent INTEGER NOT NULL DEFAULT 0,
+            msg_approved_sent INTEGER NOT NULL DEFAULT 0,
+            msg_rejected_sent INTEGER NOT NULL DEFAULT 0,
+            msg_checkedin_sent INTEGER NOT NULL DEFAULT 0,
+            msg_completed_sent INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS slots (
@@ -244,6 +248,9 @@ def migrate_bookings_table(db):
         row["name"]
         for row in db.execute("PRAGMA table_info(bookings)").fetchall()
     }
+    
+    message_flags = ["msg_approved_sent", "msg_rejected_sent", "msg_checkedin_sent", "msg_completed_sent"]
+    
     if "whatsapp_sent" not in booking_columns:
         db.execute(
             """
@@ -251,6 +258,41 @@ def migrate_bookings_table(db):
             ADD COLUMN whatsapp_sent INTEGER NOT NULL DEFAULT 0
             """
         )
+    
+    for flag in message_flags:
+        if flag not in booking_columns:
+            db.execute(
+                f"""
+                ALTER TABLE bookings
+                ADD COLUMN {flag} INTEGER NOT NULL DEFAULT 0
+                """
+            )
+    
+    # Data migration for existing bookings
+    db.execute("""
+        UPDATE bookings 
+        SET msg_approved_sent = 1 
+        WHERE status IN ('checked_in', 'completed')
+    """)
+    
+    db.execute("""
+        UPDATE bookings 
+        SET msg_checkedin_sent = 1 
+        WHERE status = 'checked_in'
+    """)
+    
+    db.execute("""
+        UPDATE bookings 
+        SET msg_completed_sent = 1 
+        WHERE status = 'completed'
+    """)
+    
+    # Reset rejected flag if any weird data
+    db.execute("""
+        UPDATE bookings 
+        SET msg_rejected_sent = 0 
+        WHERE status != 'rejected'
+    """)
 
 def migrate_vehicles():
     """NEW: Migrate customers.vehicle → normalized vehicles table"""

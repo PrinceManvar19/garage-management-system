@@ -208,6 +208,7 @@
       : '';
   }
 
+<<<<<<< HEAD
   function setVehicleLookupMessage(message, tone) {
     vehicleLookupMessage.textContent = message;
     vehicleLookupMessage.style.color = tone === 'error'
@@ -303,6 +304,26 @@
       if (selected) {
         setSelectedVehicle(selected);
       }
+=======
+function onVehicleSelectAdmin(selectEl) {
+    const brandModelInput = document.querySelector('input[name="brand_model"]');
+    if (selectEl.value === '__new__') {
+        // Show text input for manual entry
+        selectEl.insertAdjacentHTML('afterend', '<input type="text" id="new-vehicle-input" name="vehicle" placeholder="Enter plate e.g. GJ01AB1234" style="width:100%;padding:8px;margin-top:6px;border:1px solid #ccc;border-radius:6px;" required>');
+        selectEl.removeAttribute('name');
+        if (brandModelInput) { brandModelInput.value = ''; brandModelInput.removeAttribute('readonly'); }
+    } else {
+        const opt = selectEl.options[selectEl.selectedIndex];
+        const brand = opt.getAttribute('data-brand') || '';
+        const model = opt.getAttribute('data-model') || '';
+        if (brandModelInput) {
+            brandModelInput.value = (brand + ' ' + model).trim();
+        }
+        // Remove manual input if it exists
+        const manualInput = document.getElementById('new-vehicle-input');
+        if (manualInput) manualInput.remove();
+        selectEl.setAttribute('name', 'vehicle');
+>>>>>>> main
     }
   }
 

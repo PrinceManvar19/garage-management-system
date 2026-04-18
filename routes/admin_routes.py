@@ -7,8 +7,10 @@ from urllib.parse import quote
 from flask import Blueprint, jsonify, Response, flash, redirect, render_template, request, session, url_for
 
 from models.db import get_db
+from models.booking_model import update_message_flags
 from services.booking_service import (
     approve_booking as approve_booking_service,
+    build_whatsapp_message,
     checkin_vehicle,
     complete_booking_by_id,
     create_manual_booking_with_customer,
@@ -16,7 +18,11 @@ from services.booking_service import (
     get_admin_bookings,
     get_booking_by_id,
     get_booking_stats,
+<<<<<<< HEAD
     mark_whatsapp_sent,
+=======
+    normalize_phone,
+>>>>>>> main
     reject_booking as reject_booking_service,
 )
 from services.slot_service import get_slots_for_admin, set_slot_total
@@ -39,31 +45,35 @@ def _require_admin():
     return session.get("role") == "admin"
 
 
-def _build_whatsapp_message(booking):
-    status_labels = {
-        STATUS_PENDING: "Pending",
-        STATUS_APPROVED: "Approved",
-        STATUS_IN_GARAGE: "Checked-In",
-        STATUS_REJECTED: "Rejected",
-        STATUS_COMPLETED: "Completed",
-    }
-    status = booking.get("status")
-    return (
-        f"Hello {booking.get('name', '')}\n\n"
-        f"Booking ID: {booking.get('booking_id', '')}\n"
-        f"Service: {booking.get('service', '')}\n"
-        f"Vehicle: {booking.get('vehicle', '')}\n"
-        f"Date: {booking.get('date', '')}\n"
-        f"Status: {status_labels.get(status, (status or '').title())}\n\n"
-        "Thank you - Shreeji Auto Services"
-    )
+def _redirect_with_whatsapp(booking_id, booking, fallback_response):
+    if not booking:
+        return fallback_response
+
+    whatsapp_message, flags = build_whatsapp_message(booking)
+    phone = normalize_phone(booking.get("phone", ""))
+    if not whatsapp_message or not phone:
+        return fallback_response
+
+    try:
+        if flags:
+            update_message_flags(booking_id, **flags)
+            get_db().commit()
+    except Exception as error:
+        get_db().rollback()
+        log_action("DB ERROR UPDATE MSG FLAGS", f"{booking_id} - {error}")
+        flash("Booking updated, but notification flags could not be saved.", "warning")
+        return fallback_response
+
+    encoded = quote(whatsapp_message)
+    whatsapp_url = f"https://wa.me/91{phone}?text={encoded}"
+    return redirect(whatsapp_url)
 
 
 def _csv_response(filename, headers, rows):
     return Response(
         _csv_string(headers, rows),
         mimetype="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'attachment; filename=\"{filename}\"' },
     )
 
 
@@ -83,7 +93,6 @@ def _format_csv_datetime(value):
     return _normalize_csv_value(format_datetime_display(value))
 
 
-# CHANGED: Shared admin page/export helpers for the sidebar split.
 BOOKING_EXPORT_HEADERS = [
     "booking_id",
     "customer_id",
@@ -335,7 +344,6 @@ def _render_admin_dashboard(filters=None, booking_data=None, checkin_booking_id=
     )
 
 
-# CHANGED: Shared renderer for /checkin and /admin/checkin/verify.
 def _render_checkin_page(booking_data=None, checkin_booking_id=""):
     today = get_today_date_string()
     all_bookings = get_admin_bookings()
@@ -378,7 +386,6 @@ def admin_dashboard():
     return _render_admin_dashboard(booking_data=booking_data, checkin_booking_id=checkin_booking_id)
 
 
-# CHANGED: Sidebar page for slot management.
 @admin_bp.route("/admin/slots")
 def admin_slots():
     if not _require_admin():
@@ -394,7 +401,6 @@ def admin_slots():
     return render_template("admin_slots.html", slots=slots, today=get_today_date_string())
 
 
-# CHANGED: Sidebar page for booking request management.
 @admin_bp.route("/admin/bookings")
 def admin_bookings():
     if not _require_admin():
@@ -409,7 +415,6 @@ def admin_bookings():
     return render_template("admin_bookings.html", bookings=bookings, filters=filters, today=today)
 
 
-# CHANGED: Sidebar page for walk-in customer lookup and garage entry.
 @admin_bp.route("/admin/walkin", methods=["GET", "POST"])
 def admin_walkin():
     if not _require_admin():
@@ -428,13 +433,80 @@ def admin_walkin():
     return render_template("admin_walkin.html", today=today)
 
 
-# CHANGED: Sidebar page for filtered CSV/ZIP exports.
 @admin_bp.route("/admin/export")
 def admin_export():
     if not _require_admin():
         return redirect(url_for("main.home"))
 
     return render_template("admin_export.html", today=get_today_date_string())
+
+
+@admin_bp.route("/admin/search-customer")
+def search_customer():
+    if not _require_admin():
+        return jsonify({"error": "unauthorized"}), 403
+
+    query = request.args.get("q", "").strip()
+    results = [
+        {
+            "customer_id": customer.get("id", ""),
+            "id": customer.get("id", ""),
+            "name": customer.get("name", ""),
+            "phone": customer.get("phone", ""),
+            "vehicle": customer.get("vehicle", ""),
+        }
+        for customer in search_customers(query, limit=8)
+    ]
+    return jsonify(results)
+
+
+@admin_bp.route("/admin/add-customer", methods=["POST"])
+def add_customer():
+    if not _require_admin():
+        return jsonify({"success": False, "error": "unauthorized"}), 403
+
+    payload = request.get_json(silent=True) or request.form
+    name = payload.get("name", "").strip()
+    phone = normalize_phone(payload.get("phone", "").strip())
+    vehicle = payload.get("vehicle", "").strip().upper()
+
+    if not all([name, phone, vehicle]):
+        return jsonify({"success": False, "error": "Name, phone, and vehicle are required."}), 400
+    if len(phone) != 10:
+        return jsonify({"success": False, "error": "Phone number must be exactly 10 digits."}), 400
+
+    try:
+        customer = ensure_customer(phone, name, vehicle)
+    except Exception as error:
+        get_db().rollback()
+        log_action("ADD CUSTOMER ERROR", str(error))
+        return jsonify({"success": False, "error": "Customer could not be saved right now."}), 500
+
+    return jsonify(
+        {
+            "success": True,
+            "customer": {
+                "customer_id": customer.get("id", ""),
+                "id": customer.get("id", ""),
+                "name": customer.get("name", ""),
+                "phone": customer.get("phone", ""),
+                "vehicle": customer.get("vehicle", ""),
+            },
+        }
+    )
+
+
+@admin_bp.route("/checkin")
+@admin_bp.route("/admin/checkin")
+def admin_checkin_page():
+    if not _require_admin():
+        return redirect(url_for("main.home"))
+
+    checkin_booking_id = request.args.get("checkin_booking_id", "").strip().upper()
+    booking_data = get_booking_by_id(checkin_booking_id) if checkin_booking_id else None
+    if checkin_booking_id and not booking_data:
+        flash("Booking not found", "danger")
+    return _render_checkin_page(booking_data=booking_data, checkin_booking_id=checkin_booking_id)
 
 
 @admin_bp.route("/admin/checkin/verify", methods=["POST"])
@@ -515,8 +587,12 @@ def approve_booking(booking_id):
         flash(message, "info" if booking.get("status") == STATUS_APPROVED else "danger")
         return redirect(url_for("admin.admin_dashboard"))
 
-    flash("Booking Approved", "success")
-    return redirect(url_for("admin.admin_dashboard"))
+    booking = get_booking_by_id(booking_id)
+    return _redirect_with_whatsapp(
+        booking_id,
+        booking,
+        redirect(url_for("admin.admin_dashboard")),
+    )
 
 
 @admin_bp.route("/admin/reject/<booking_id>")
@@ -525,8 +601,16 @@ def reject_booking(booking_id):
         return redirect(url_for("main.home"))
 
     success, message, _booking = reject_booking_service(booking_id)
-    flash(message if not success else "Booking Rejected", "error" if not success else "danger")
-    return redirect(url_for("admin.admin_dashboard"))
+    if not success:
+        flash(message, "danger")
+        return redirect(url_for("admin.admin_dashboard"))
+
+    booking = get_booking_by_id(booking_id)
+    fallback_response = redirect(url_for("admin.admin_dashboard"))
+    notification_response = _redirect_with_whatsapp(booking_id, booking, fallback_response)
+    if notification_response is fallback_response:
+        flash("Booking Rejected", "danger")
+    return notification_response
 
 
 @admin_bp.route("/admin/checkin/<booking_id>")
@@ -535,6 +619,7 @@ def admin_checkin_booking(booking_id):
         return redirect(url_for("main.home"))
 
     success, message, booking = checkin_vehicle(booking_id, get_today_date_string())
+<<<<<<< HEAD
     flash(message if not success else "Vehicle checked-in successfully", "danger" if not success else "success")
     booking_data = get_booking_by_id(booking_id) if success else (enrich_booking(booking) if booking else None)
     return _render_checkin_page(booking_data=booking_data, checkin_booking_id=booking_id)
@@ -560,10 +645,14 @@ def send_booking_whatsapp(booking_id):
         return redirect(url_for("admin.admin_dashboard"))
 
     success, message, _updated_booking = mark_whatsapp_sent(booking_id)
+=======
+>>>>>>> main
     if not success:
         flash(message, "danger")
-        return redirect(url_for("admin.admin_dashboard"))
+        booking_data = get_booking_by_id(booking_id) if success else enrich_booking(booking)
+        return _render_checkin_page(booking_data=booking_data, checkin_booking_id=booking_id)
 
+<<<<<<< HEAD
     whatsapp_url = f"https://wa.me/91{phone}?text={quote(_build_whatsapp_message(booking))}"
     return redirect(whatsapp_url)
 
@@ -859,6 +948,14 @@ def export_download():
     if response is None:
         return "Invalid data_type", 400
     return response
+=======
+    booking = get_booking_by_id(booking_id)
+    fallback_response = _render_checkin_page(booking_data=booking, checkin_booking_id=booking_id)
+    notification_response = _redirect_with_whatsapp(booking_id, booking, fallback_response)
+    if notification_response is fallback_response:
+        flash("Vehicle checked-in successfully", "success")
+    return notification_response
+>>>>>>> main
 
 
 @admin_bp.route("/admin/complete/<booking_id>")
@@ -881,5 +978,14 @@ def complete_booking(booking_id):
         flash(message, "error")
         return redirect(url_for("admin.admin_dashboard"))
 
+<<<<<<< HEAD
     flash("Vehicle marked completed", "success")
     return redirect(url_for("admin.admin_dashboard"))
+=======
+    booking = get_booking_by_id(booking_id)
+    fallback_response = redirect(url_for("admin.admin_dashboard"))
+    notification_response = _redirect_with_whatsapp(booking_id, booking, fallback_response)
+    if notification_response is fallback_response:
+        flash("Vehicle marked completed", "success")
+    return notification_response
+>>>>>>> main
