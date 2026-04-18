@@ -1,5 +1,7 @@
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for, jsonify
 import re
+import sqlite3
+
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for, jsonify
 from models.db import get_db
 
 from models.customer_model import get_customer_by_id, get_customer_by_phone, get_vehicles_by_customer
@@ -20,7 +22,6 @@ def api_vehicles(identifier):
 @customer_bp.route("/api/vehicles/add", methods=["POST"])
 def api_add_vehicle():
     """NEW: Add new vehicle for logged-in customer"""
-    print("Session:", dict(session))
     customer_id = session.get("customer_id")
     if not customer_id:
         phone = session.get("phone")
@@ -30,9 +31,7 @@ def api_add_vehicle():
     
     if not customer_id:
         return jsonify({"success": False, "message": "Customer not found"}), 400
-    
-    print("Customer ID:", customer_id)
-    
+
     data = request.get_json()
     if not data:
         return jsonify({"success": False, "message": "Invalid JSON"}), 400
@@ -49,7 +48,7 @@ def api_add_vehicle():
 
     try:
         db = get_db()
-        cursor = db.execute(
+        db.execute(
             """
             INSERT INTO vehicles (plate_number, customer_id, brand, model)
             VALUES (?, ?, ?, ?)
@@ -57,19 +56,17 @@ def api_add_vehicle():
             (plate_number, customer_id, brand, model)
         )
         db.commit()
-
-        if cursor.rowcount > 0:
-            vehicle = {
-                "plate_number": plate_number,
-                "brand": brand,
-                "model": model
-            }
-            return jsonify({"success": True, "vehicle": vehicle})
-        else:
-            return jsonify({"success": False, "message": "Vehicle already exists"}), 409
+        vehicle = {
+            "plate_number": plate_number,
+            "brand": brand,
+            "model": model
+        }
+        return jsonify({"success": True, "vehicle": vehicle})
+    except sqlite3.IntegrityError:
+        db.rollback()
+        return jsonify({"success": False, "message": "Vehicle already exists"}), 409
     except Exception as e:
         db.rollback()
-        print(f"ADD VEHICLE ERROR: {e}")
         return jsonify({"success": False, "message": "Database error"}), 500
 
 

@@ -10,15 +10,15 @@ from models.booking_model import (
     get_latest_booking_id,
     search_bookings,
     update_booking_status,
-    update_whatsapp_sent,
 )
-from models.customer_model import get_customer_by_id, get_customer_by_phone, get_customer_map
+from models.customer_model import get_customer_by_id, get_customer_map
 from models.db import get_db
 from services.slot_service import get_slot_availability
 from utils.constants import (
     STATUS_APPROVED,
-    STATUS_IN_GARAGE,
+    STATUS_CHECKED_IN,
     STATUS_COMPLETED,
+    STATUS_IN_GARAGE,
     STATUS_PENDING,
     STATUS_REJECTED,
 )
@@ -124,13 +124,12 @@ def _validate_booking_input(customer_id, phone, vehicle, service, date):
     return True, ""
 
 
-def create_booking_for_customer(customer_id, name, phone, vehicle, brand_model, service, date, performed_by=None):  # CHANGED: Add duplicate booking check
-    # CHANGED: Duplicate booking check per specs
+def create_booking_for_customer(customer_id, name, phone, vehicle, brand_model, service, date, performed_by=None):
     db = get_db()
     existing = db.execute(
         "SELECT COUNT(*) FROM bookings WHERE customer_id = ? AND date = ? "
         "AND status NOT IN ('rejected', 'completed')",
-        (customer_id.strip().upper(), date.strip())
+        (customer_id.strip().upper(), date.strip()),
     ).fetchone()[0]
     if existing > 0:
         return False, "You already have a booking on this date.", None
@@ -138,6 +137,7 @@ def create_booking_for_customer(customer_id, name, phone, vehicle, brand_model, 
     is_valid, message = _validate_booking_input(customer_id, phone, vehicle.strip().upper(), service.strip(), date.strip())
     if not is_valid:
         from utils.helpers import log_action
+
         log_action("BOOKING VALIDATION FAILED", f"{customer_id} - {message}")
         return False, message, None
     customer = get_customer_by_id(customer_id.strip().upper())
@@ -157,6 +157,10 @@ def create_booking_for_customer(customer_id, name, phone, vehicle, brand_model, 
         "checked_in_at": None,
         "completed_at": None,
         "whatsapp_sent": 0,
+        "msg_approved_sent": 0,
+        "msg_rejected_sent": 0,
+        "msg_checkedin_sent": 0,
+        "msg_completed_sent": 0,
     }
     try:
         _begin_write_transaction()
@@ -169,23 +173,23 @@ def create_booking_for_customer(customer_id, name, phone, vehicle, brand_model, 
             return False, "All slots are booked for this date.", None
         create_booking(booking)
         get_db().commit()
-        from utils.helpers import log_action
-        log_action("BOOKING CREATED", f"{booking['booking_id']} - {name}")
-    except sqlite3.Error as e:
+    except sqlite3.Error as error:
         get_db().rollback()
         from utils.helpers import log_action
-        log_action("BOOKING ERROR SQLITE", f"{booking.get('booking_id', 'unknown')} - {str(e)}")
+
+        log_action("BOOKING ERROR SQLITE", f"{booking.get('booking_id', 'unknown')} - {error}")
         return False, "Booking could not be saved right now. Please try again.", None
-    except Exception as e:
+    except Exception as error:
         get_db().rollback()
         from utils.helpers import log_action
-        log_action("BOOKING ERROR", f"{booking.get('booking_id', 'unknown')} - {str(e)}")
+
+        log_action("BOOKING ERROR", f"{booking.get('booking_id', 'unknown')} - {error}")
         return False, "Unexpected error occurred. Please try again.", None
     return True, "", booking
 
 
-def create_manual_booking(name, phone, vehicle, brand_model, service, date, performed_by=None):  # CHANGED: Call normalize_phone()
-    normalized_phone = normalize_phone(phone)  # CHANGED: Normalize per specs before validation
+def create_manual_booking(name, phone, vehicle, brand_model, service, date, performed_by=None):
+    normalized_phone = normalize_phone(phone)
     if not normalized_phone:
         return False, "Phone number must be exactly 10 digits.", None
     if not all([name.strip(), vehicle.strip(), brand_model.strip(), service.strip()]):
@@ -196,37 +200,45 @@ def create_manual_booking(name, phone, vehicle, brand_model, service, date, perf
         "booking_id": generate_unique_booking_id("MANUAL"),
         "customer_id": "",
         "name": name.strip(),
-"phone": normalized_phone,  # CHANGED: Use normalized phone
+        "phone": normalized_phone,
         "vehicle": vehicle.strip().upper(),
         "brand_model": brand_model.strip(),
         "service": service.strip(),
         "date": date,
-        "status": STATUS_IN_GARAGE,
+        "status": STATUS_CHECKED_IN,
         "created_at": timestamp,
         "checked_in_at": timestamp,
         "completed_at": None,
         "whatsapp_sent": 0,
+        "msg_approved_sent": 0,
+        "msg_rejected_sent": 0,
+        "msg_checkedin_sent": 0,
+        "msg_completed_sent": 0,
     }
     try:
         _begin_write_transaction()
         create_booking(booking)
         get_db().commit()
-    except sqlite3.Error:
+    except sqlite3.Error as error:
         get_db().rollback()
+        from utils.helpers import log_action
+
+        log_action("WALKIN ERROR SQLITE", f"{booking.get('booking_id', 'unknown')} - {error}")
         return False, "Walk-in entry could not be saved right now. Please try again.", None
     return True, "", booking
 
 
-def create_manual_booking_with_customer(customer_id, name, phone, vehicle, brand_model, service, date):  # CHANGED: Call normalize_phone()
+def create_manual_booking_with_customer(customer_id, name, phone, vehicle, brand_model, service, date):
     normalized_customer_id = (customer_id or "").strip().upper()
     if normalized_customer_id:
         customer = get_customer_by_id(normalized_customer_id)
         if not customer:
             from utils.helpers import log_action
+
             log_action("WALKIN CUSTOMER NOT FOUND", f"{customer_id}")
             return False, "Customer ID was not found.", None
         name = customer.get("name", name)
-        normalized_phone = normalize_phone(customer.get("phone", phone))  # CHANGED: Normalize phone
+        normalized_phone = normalize_phone(customer.get("phone", phone))
         if not normalized_phone:
             return False, "Customer phone invalid", None
         phone = normalized_phone
@@ -267,6 +279,36 @@ def get_booking_stats(bookings):
         "completed": len([b for b in bookings if b.get("status") == STATUS_COMPLETED]),
         "rejected": len([b for b in bookings if b.get("status") == STATUS_REJECTED]),
     }
+
+
+def build_whatsapp_message(booking):
+    messages = []
+    flags_to_update = {}
+    booking_id = booking.get("booking_id", "").strip()
+    customer_name = booking.get("name", "").strip() or "Customer"
+    vehicle = booking.get("vehicle", "").strip()
+    status = booking.get("status")
+
+    if status in [STATUS_APPROVED, STATUS_CHECKED_IN, STATUS_COMPLETED] and not booking["msg_approved_sent"]:
+        messages.append(f"Hello {customer_name}, your booking {booking_id} has been approved.")
+        flags_to_update["msg_approved_sent"] = 1
+
+    if status in [STATUS_CHECKED_IN, STATUS_COMPLETED] and not booking["msg_checkedin_sent"]:
+        if vehicle:
+            messages.append(f"Vehicle {vehicle} has been checked in at the garage.")
+        else:
+            messages.append("Your vehicle has been checked in at the garage.")
+        flags_to_update["msg_checkedin_sent"] = 1
+
+    if status == STATUS_COMPLETED and not booking["msg_completed_sent"]:
+        messages.append(f"Service for booking {booking_id} is completed. Your vehicle is ready for pickup.")
+        flags_to_update["msg_completed_sent"] = 1
+
+    if status == STATUS_REJECTED and not booking["msg_rejected_sent"]:
+        messages.append(f"Hello {customer_name}, your booking request {booking_id} was rejected.")
+        flags_to_update["msg_rejected_sent"] = 1
+
+    return "\n\n".join(messages), flags_to_update
 
 
 def approve_booking(booking_id):
@@ -356,6 +398,7 @@ def checkin_vehicle(booking_id, today, performed_by=None):
         update_booking_status(booking_id, STATUS_IN_GARAGE, checked_in_at, None)
         get_db().commit()
         from utils.helpers import log_action
+
         log_action("CHECK-IN", booking_id, performed_by)
     except sqlite3.Error:
         get_db().rollback()
@@ -383,22 +426,9 @@ def complete_booking_by_id(booking_id, performed_by=None):
         update_booking_status(booking_id, STATUS_COMPLETED, booking.get("checked_in_at"), completed_at, 0)
         get_db().commit()
         from utils.helpers import log_action
+
         log_action("COMPLETED", booking_id, performed_by)
     except sqlite3.Error:
         get_db().rollback()
         return False, "Vehicle could not be completed right now. Please try again.", booking
-    return True, "", fetch_booking_by_id(booking_id)
-
-
-def mark_whatsapp_sent(booking_id):
-    booking = fetch_booking_by_id(booking_id)
-    if not booking:
-        return False, "Booking not found.", None
-    try:
-        _begin_write_transaction()
-        update_whatsapp_sent(booking_id, 1)
-        get_db().commit()
-    except sqlite3.Error:
-        get_db().rollback()
-        return False, "WhatsApp tracking could not be updated right now.", booking
     return True, "", fetch_booking_by_id(booking_id)

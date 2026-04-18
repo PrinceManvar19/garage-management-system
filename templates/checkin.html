@@ -307,7 +307,7 @@
               <span class="status-badge status-pending">Pending</span>
             {% elif booking.status == 'approved' %}
               <span class="status-badge status-approved">Approved</span>
-            {% elif booking.status == 'in_garage' %}
+            {% elif booking.status == 'checked_in' %}
               <span class="status-badge status-in_service">In Garage</span>
             {% elif booking.status == 'completed' %}
               <span class="status-badge status-completed">Completed</span>
@@ -349,7 +349,7 @@
                 WhatsApp
               </a>
             {% endif %}
-          {% elif booking.status == 'in_garage' %}
+          {% elif booking.status == 'checked_in' %}
             <span class="status-badge status-in_service">Already checked in</span>
 <a href="/admin/complete/{{ booking.booking_id }}"
                class="btn btn-sm"

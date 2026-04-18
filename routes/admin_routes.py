@@ -7,8 +7,10 @@ from urllib.parse import quote
 from flask import Blueprint, jsonify, Response, flash, redirect, render_template, request, session, url_for
 
 from models.db import get_db
+from models.booking_model import update_message_flags
 from services.booking_service import (
     approve_booking as approve_booking_service,
+    build_whatsapp_message,
     checkin_vehicle,
     complete_booking_by_id,
     create_manual_booking_with_customer,
@@ -16,7 +18,6 @@ from services.booking_service import (
     get_admin_bookings,
     get_booking_by_id,
     get_booking_stats,
-    mark_whatsapp_sent,
     normalize_phone,
     reject_booking as reject_booking_service,
 )
@@ -39,24 +40,28 @@ def _require_admin():
     return session.get("role") == "admin"
 
 
-def _build_whatsapp_message(booking):
-    status_labels = {
-        STATUS_PENDING: "Pending",
-        STATUS_APPROVED: "Approved",
-        STATUS_IN_GARAGE: "Checked-In",
-        STATUS_REJECTED: "Rejected",
-        STATUS_COMPLETED: "Completed",
-    }
-    status = booking.get("status")
-    return (
-        f"Hello {booking.get('name', '')}\n\n"
-        f"Booking ID: {booking.get('booking_id', '')}\n"
-        f"Service: {booking.get('service', '')}\n"
-        f"Vehicle: {booking.get('vehicle', '')}\n"
-        f"Date: {booking.get('date', '')}\n"
-        f"Status: {status_labels.get(status, (status or '').title())}\n\n"
-        "Thank you - Shreeji Auto Services"
-    )
+def _redirect_with_whatsapp(booking_id, booking, fallback_response):
+    if not booking:
+        return fallback_response
+
+    whatsapp_message, flags = build_whatsapp_message(booking)
+    phone = normalize_phone(booking.get("phone", ""))
+    if not whatsapp_message or not phone:
+        return fallback_response
+
+    try:
+        if flags:
+            update_message_flags(booking_id, **flags)
+            get_db().commit()
+    except Exception as error:
+        get_db().rollback()
+        log_action("DB ERROR UPDATE MSG FLAGS", f"{booking_id} - {error}")
+        flash("Booking updated, but notification flags could not be saved.", "warning")
+        return fallback_response
+
+    encoded = quote(whatsapp_message)
+    whatsapp_url = f"https://wa.me/91{phone}?text={encoded}"
+    return redirect(whatsapp_url)
 
 
 def _csv_response(filename, headers, rows):
@@ -67,7 +72,7 @@ def _csv_response(filename, headers, rows):
     return Response(
         output.getvalue(),
         mimetype="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'attachment; filename=\"{filename}\"' },
     )
 
 
@@ -87,7 +92,6 @@ def _format_csv_datetime(value):
     return _normalize_csv_value(format_datetime_display(value))
 
 
-# CHANGED: Shared admin page/export helpers for the sidebar split.
 BOOKING_EXPORT_HEADERS = [
     "booking_id",
     "customer_id",
@@ -257,7 +261,6 @@ def _render_admin_dashboard(filters=None, booking_data=None, checkin_booking_id=
     )
 
 
-# CHANGED: Shared renderer for /checkin and /admin/checkin/verify.
 def _render_checkin_page(booking_data=None, checkin_booking_id=""):
     today = get_today_date_string()
     all_bookings = get_admin_bookings()
@@ -300,7 +303,6 @@ def admin_dashboard():
     return _render_admin_dashboard(booking_data=booking_data, checkin_booking_id=checkin_booking_id)
 
 
-# CHANGED: Sidebar page for slot management.
 @admin_bp.route("/admin/slots")
 def admin_slots():
     if not _require_admin():
@@ -316,7 +318,6 @@ def admin_slots():
     return render_template("admin_slots.html", slots=slots, today=get_today_date_string())
 
 
-# CHANGED: Sidebar page for booking request management.
 @admin_bp.route("/admin/bookings")
 def admin_bookings():
     if not _require_admin():
@@ -331,7 +332,6 @@ def admin_bookings():
     return render_template("admin_bookings.html", bookings=bookings, filters=filters, today=today)
 
 
-# CHANGED: Sidebar page for walk-in customer lookup and garage entry.
 @admin_bp.route("/admin/walkin", methods=["GET", "POST"])
 def admin_walkin():
     if not _require_admin():
@@ -363,13 +363,80 @@ def admin_walkin():
     return render_template("admin_walkin.html", today=today)
 
 
-# CHANGED: Sidebar page for filtered CSV/ZIP exports.
 @admin_bp.route("/admin/export")
 def admin_export():
     if not _require_admin():
         return redirect(url_for("main.home"))
 
     return render_template("admin_export.html", today=get_today_date_string())
+
+
+@admin_bp.route("/admin/search-customer")
+def search_customer():
+    if not _require_admin():
+        return jsonify({"error": "unauthorized"}), 403
+
+    query = request.args.get("q", "").strip()
+    results = [
+        {
+            "customer_id": customer.get("id", ""),
+            "id": customer.get("id", ""),
+            "name": customer.get("name", ""),
+            "phone": customer.get("phone", ""),
+            "vehicle": customer.get("vehicle", ""),
+        }
+        for customer in search_customers(query, limit=8)
+    ]
+    return jsonify(results)
+
+
+@admin_bp.route("/admin/add-customer", methods=["POST"])
+def add_customer():
+    if not _require_admin():
+        return jsonify({"success": False, "error": "unauthorized"}), 403
+
+    payload = request.get_json(silent=True) or request.form
+    name = payload.get("name", "").strip()
+    phone = normalize_phone(payload.get("phone", "").strip())
+    vehicle = payload.get("vehicle", "").strip().upper()
+
+    if not all([name, phone, vehicle]):
+        return jsonify({"success": False, "error": "Name, phone, and vehicle are required."}), 400
+    if len(phone) != 10:
+        return jsonify({"success": False, "error": "Phone number must be exactly 10 digits."}), 400
+
+    try:
+        customer = ensure_customer(phone, name, vehicle)
+    except Exception as error:
+        get_db().rollback()
+        log_action("ADD CUSTOMER ERROR", str(error))
+        return jsonify({"success": False, "error": "Customer could not be saved right now."}), 500
+
+    return jsonify(
+        {
+            "success": True,
+            "customer": {
+                "customer_id": customer.get("id", ""),
+                "id": customer.get("id", ""),
+                "name": customer.get("name", ""),
+                "phone": customer.get("phone", ""),
+                "vehicle": customer.get("vehicle", ""),
+            },
+        }
+    )
+
+
+@admin_bp.route("/checkin")
+@admin_bp.route("/admin/checkin")
+def admin_checkin_page():
+    if not _require_admin():
+        return redirect(url_for("main.home"))
+
+    checkin_booking_id = request.args.get("checkin_booking_id", "").strip().upper()
+    booking_data = get_booking_by_id(checkin_booking_id) if checkin_booking_id else None
+    if checkin_booking_id and not booking_data:
+        flash("Booking not found", "danger")
+    return _render_checkin_page(booking_data=booking_data, checkin_booking_id=checkin_booking_id)
 
 
 @admin_bp.route("/admin/checkin/verify", methods=["POST"])
@@ -486,8 +553,12 @@ def approve_booking(booking_id):
         flash(message, "info" if booking.get("status") == STATUS_APPROVED else "danger")
         return redirect(url_for("admin.admin_dashboard"))
 
-    flash("Booking Approved", "success")
-    return redirect(url_for("admin.admin_dashboard"))
+    booking = get_booking_by_id(booking_id)
+    return _redirect_with_whatsapp(
+        booking_id,
+        booking,
+        redirect(url_for("admin.admin_dashboard")),
+    )
 
 
 @admin_bp.route("/admin/reject/<booking_id>")
@@ -496,8 +567,16 @@ def reject_booking(booking_id):
         return redirect(url_for("main.home"))
 
     success, message, _booking = reject_booking_service(booking_id)
-    flash(message if not success else "Booking Rejected", "error" if not success else "danger")
-    return redirect(url_for("admin.admin_dashboard"))
+    if not success:
+        flash(message, "danger")
+        return redirect(url_for("admin.admin_dashboard"))
+
+    booking = get_booking_by_id(booking_id)
+    fallback_response = redirect(url_for("admin.admin_dashboard"))
+    notification_response = _redirect_with_whatsapp(booking_id, booking, fallback_response)
+    if notification_response is fallback_response:
+        flash("Booking Rejected", "danger")
+    return notification_response
 
 
 @admin_bp.route("/admin/checkin/<booking_id>")
@@ -506,320 +585,17 @@ def admin_checkin_booking(booking_id):
         return redirect(url_for("main.home"))
 
     success, message, booking = checkin_vehicle(booking_id, get_today_date_string())
-    flash(message if not success else "Vehicle checked-in successfully", "danger" if not success else "success")
-    booking_data = get_booking_by_id(booking_id) if success else (enrich_booking(booking) if booking else None)
-    # CHANGED: Keep the same action URL but return to the Check-In page/sidebar context.
-    return _render_checkin_page(booking_data=booking_data, checkin_booking_id=booking_id)
-
-
-@admin_bp.route("/admin/whatsapp/<booking_id>")
-def send_booking_whatsapp(booking_id):
-    if not _require_admin():
-        return redirect(url_for("main.home"))
-
-    booking = get_booking_by_id(booking_id)
-    if not booking:
-        flash("Booking not found", "danger")
-        return redirect(url_for("admin.admin_dashboard"))
-
-    if booking.get("status") not in {STATUS_PENDING, STATUS_APPROVED, STATUS_IN_GARAGE, STATUS_REJECTED, STATUS_COMPLETED}:
-        flash("WhatsApp is not available for this booking", "danger")
-        return redirect(url_for("admin.admin_dashboard"))
-
-    phone = normalize_phone(booking.get("phone", ""))
-    if not phone:
-        flash("Customer phone number is not available", "danger")
-        return redirect(url_for("admin.admin_dashboard"))
-
-    success, message, _updated_booking = mark_whatsapp_sent(booking_id)
     if not success:
         flash(message, "danger")
-        return redirect(url_for("admin.admin_dashboard"))
+        booking_data = get_booking_by_id(booking_id) if success else enrich_booking(booking)
+        return _render_checkin_page(booking_data=booking_data, checkin_booking_id=booking_id)
 
-    whatsapp_url = f"https://wa.me/91{phone}?text={quote(_build_whatsapp_message(booking))}"
-    return redirect(whatsapp_url)
-
-
-@admin_bp.route("/admin/export-data")
-def export_data():
-    if not _require_admin():
-        return redirect(url_for("main.home"))
-
-    import zipfile
-    from io import BytesIO
-
-    zip_buffer = BytesIO()
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        customer_map = get_customer_map()
-        customer_rows = [
-            [
-                _normalize_csv_value(customer.get("id")),
-                _normalize_csv_value(customer.get("name")),
-                _normalize_csv_value(customer.get("phone")),
-                _normalize_csv_value(customer.get("vehicle")),
-            ]
-            for customer in customer_map.values()
-        ]
-        customer_csv_content = StringIO()
-        customer_writer = csv.writer(customer_csv_content, quoting=csv.QUOTE_ALL)
-        customer_writer.writerow(["id", "name", "phone", "vehicle"])
-        customer_writer.writerows(customer_rows)
-        zip_file.writestr("customers_export.csv", customer_csv_content.getvalue())
-
-        bookings = get_admin_bookings()
-        booking_rows = [
-            [
-                _normalize_csv_value(booking.get("booking_id", "")),
-                _normalize_csv_value(booking.get("customer_id", "")),
-                _normalize_csv_value(booking.get("name", "")),
-                _normalize_csv_value(booking.get("phone", "")),
-                _normalize_csv_value(booking.get("vehicle", "")),
-                _normalize_csv_value(booking.get("service", "")),
-                _format_csv_date(booking.get("date", "")),
-                _normalize_csv_value(booking.get("status", "")),
-                _format_csv_datetime(booking.get("created_at", "")),
-            ]
-            for booking in bookings
-        ]
-        bookings_csv_content = StringIO()
-        bookings_writer = csv.writer(bookings_csv_content, quoting=csv.QUOTE_ALL)
-        bookings_writer.writerow(["booking_id", "customer_id", "name", "phone", "vehicle", "service", "date", "status", "created_at"])
-        bookings_writer.writerows(booking_rows)
-        zip_file.writestr("bookings_export.csv", bookings_csv_content.getvalue())
-
-    zip_buffer.seek(0)
-    return Response(
-        zip_buffer.getvalue(),
-        mimetype="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="admin_data_export.zip"'}
-    )
-
-
-@admin_bp.route("/checkin", methods=["GET", "POST"])
-def checkin():
-    if not _require_admin():
-        return redirect(url_for("main.home"))
-
-    today = get_today_date_string()
-    verified_booking = None
-    # CHANGED: /checkin GET can pre-load a booking and always renders queue + garage data.
-    checkin_booking_id = request.args.get("checkin_booking_id", "").strip().upper()
-
-    if request.method == "GET" and checkin_booking_id:
-        verified_booking = get_booking_by_id(checkin_booking_id)
-        if not verified_booking:
-            flash("Booking not found", "danger")
-
-    if request.method == "POST":
-        action = request.form.get("action", "").strip()
-        booking_id = request.form.get("booking_id", "").strip().upper()
-        checkin_booking_id = booking_id
-
-        if action == "verify_booking":
-            booking = get_booking_by_id(booking_id)
-            if not booking:
-                flash("Invalid Booking ID", "danger")
-            else:
-                verified_booking = enrich_booking(booking)
-                if booking.get("date") != today:
-                    flash("This booking is not scheduled for today", "danger")
-                elif booking.get("status") != STATUS_APPROVED:
-                    flash("Booking must be approved before check-in", "danger")
-
-        elif action == "checkin_vehicle":
-            success, message, booking = checkin_vehicle(booking_id, today)
-            if not success:
-                verified_booking = enrich_booking(booking) if booking else None
-                flash(message, "danger")
-            else:
-                verified_booking = enrich_booking(booking)
-                flash("Vehicle checked-in successfully", "success")
-
-        elif action == "manual_entry":
-            customer_id = request.form.get("customer_id", "").strip().upper()
-            name = request.form.get("name", "").strip()
-            phone = request.form.get("phone", "").strip()
-            vehicle = request.form.get("vehicle", "").strip().upper()
-            brand_model = request.form.get("brand_model", "").strip()
-            service = request.form.get("service", "").strip()
-
-            if not all([vehicle, brand_model, service]) or (not customer_id and not all([name, phone])):
-                flash("Please fill all manual entry fields", "danger")
-            else:
-                success, message, booking = create_manual_booking_with_customer(
-                    customer_id, name, phone, vehicle, brand_model, service, today,
-                )
-                if not success:
-                    flash(message, "danger")
-                else:
-                    verified_booking = enrich_booking(booking)
-                    flash(f'Walk-in vehicle added to garage as {booking["booking_id"]}', "success")
-
-    return _render_checkin_page(booking_data=verified_booking, checkin_booking_id=checkin_booking_id)
-
-
-@admin_bp.route("/admin/find-customer")
-def find_customer():
-    if not _require_admin():
-        return jsonify({"error": "unauthorized"}), 403
-
-    phone = normalize_phone(request.args.get("phone", "").strip())
-    customer = get_customer_by_phone(phone)
-    if customer:
-        return jsonify({
-            "found": True,
-            "name": customer.get("name", ""),
-            "vehicle": customer.get("vehicle", ""),
-            "phone": customer.get("phone", ""),
-            "customer_id": customer.get("id", "")
-        })
-    return jsonify({"found": False})
-
-
-@admin_bp.route("/admin/find-customer-by-id")
-def find_customer_by_id():
-    if not _require_admin():
-        return jsonify({"error": "unauthorized"}), 403
-
-    customer_id = request.args.get("customer_id", "").strip().upper()
-    customer = get_customer_by_id(customer_id)
-    if customer:
-        return jsonify({
-            "found": True,
-            "name": customer.get("name", ""),
-            "phone": customer.get("phone", ""),
-            "vehicle": customer.get("vehicle", "")
-        })
-    return jsonify({"found": False})
-
-
-# CHANGED: AJAX customer search for the walk-in page.
-@admin_bp.route("/admin/search-customer")
-def search_customer():
-    if not _require_admin():
-        return jsonify({"error": "unauthorized"}), 403
-
-    query = request.args.get("q", "").strip()
-    results = [
-        {
-            "customer_id": customer.get("id", ""),
-            "name": customer.get("name", ""),
-            "phone": customer.get("phone", ""),
-            "vehicle": customer.get("vehicle", ""),
-        }
-        for customer in search_customers(query, limit=5)
-    ]
-    return jsonify(results)
-
-
-# CHANGED: Shared JSON endpoint used by dashboard modal and walk-in registration.
-@admin_bp.route("/admin/add-customer", methods=["POST"])
-def add_customer():
-    if not _require_admin():
-        return jsonify({"success": False, "error": "unauthorized"}), 403
-
-    payload = request.get_json(silent=True) or request.form
-    name = payload.get("name", "").strip()
-    phone = normalize_phone(payload.get("phone", "").strip())
-    vehicle = payload.get("vehicle", "").strip().upper()
-
-    if not all([name, phone, vehicle]):
-        return jsonify({"success": False, "error": "Name, phone, and vehicle are required."}), 400
-    if len(phone) != 10:
-        return jsonify({"success": False, "error": "Phone number must be exactly 10 digits."}), 400
-
-    try:
-        customer = ensure_customer(phone, name, vehicle)
-    except Exception:
-        get_db().rollback()
-        return jsonify({"success": False, "error": "Customer could not be saved right now."}), 500
-
-    return jsonify({
-        "success": True,
-        "customer": {
-            "customer_id": customer.get("id", ""),
-            "name": customer.get("name", ""),
-            "phone": customer.get("phone", ""),
-            "vehicle": customer.get("vehicle", ""),
-        },
-    })
-
-
-# CHANGED: Lightweight export count preview for the new export page.
-@admin_bp.route("/admin/export-preview")
-def export_preview():
-    if not _require_admin():
-        return jsonify({"error": "unauthorized"}), 403
-
-    data_type = request.args.get("data_type", "").strip()
-    from_date = request.args.get("from_date", "").strip()
-    to_date = request.args.get("to_date", "").strip()
-    status = request.args.get("status", "").strip()
-
-    if data_type == "bookings":
-        count = _count_booking_exports(from_date, to_date, status)
-    elif data_type == "customers":
-        row = get_db().execute("SELECT COUNT(*) AS total FROM customers").fetchone()
-        count = row["total"] if row else 0
-    elif data_type == "garage":
-        count = _count_booking_exports(from_date, to_date, garage_only=True)
-    elif data_type == "all":
-        customer_row = get_db().execute("SELECT COUNT(*) AS total FROM customers").fetchone()
-        booking_count = _count_booking_exports(from_date, to_date, status)
-        count = booking_count + (customer_row["total"] if customer_row else 0)
-    else:
-        return jsonify({"count": 0})
-
-    return jsonify({"count": count})
-
-
-# CHANGED: Filtered CSV/ZIP download endpoint for /admin/export.
-@admin_bp.route("/export/download")
-def export_download():
-    if not _require_admin():
-        return redirect(url_for("main.home"))
-
-    data_type = request.args.get("data_type", "").strip()
-    from_date = request.args.get("from_date", "").strip()
-    to_date = request.args.get("to_date", "").strip()
-    status = request.args.get("status", "").strip()
-
-    if not data_type:
-        return "data_type is required", 400
-
-    if data_type == "bookings":
-        rows = _fetch_booking_export_rows(from_date, to_date, status)
-        return _csv_response("bookings.csv", BOOKING_EXPORT_HEADERS, _booking_csv_rows(rows))
-
-    if data_type == "customers":
-        rows = _fetch_customer_export_rows()
-        return _csv_response("customers.csv", CUSTOMER_EXPORT_HEADERS, _customer_csv_rows(rows))
-
-    if data_type == "garage":
-        rows = _fetch_booking_export_rows(from_date, to_date, garage_only=True)
-        return _csv_response("garage_data.csv", GARAGE_EXPORT_HEADERS, _garage_csv_rows(rows))
-
-    if data_type == "all":
-        booking_rows = _fetch_booking_export_rows(from_date, to_date, status)
-        customer_rows = _fetch_customer_export_rows()
-        zip_buffer = BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-            zip_file.writestr(
-                "bookings.csv",
-                _csv_string(BOOKING_EXPORT_HEADERS, _booking_csv_rows(booking_rows)),
-            )
-            zip_file.writestr(
-                "customers.csv",
-                _csv_string(CUSTOMER_EXPORT_HEADERS, _customer_csv_rows(customer_rows)),
-            )
-        zip_buffer.seek(0)
-        return Response(
-            zip_buffer.getvalue(),
-            mimetype="application/zip",
-            headers={"Content-Disposition": 'attachment; filename="admin_data_export.zip"'},
-        )
-
-    return "Invalid data_type", 400
+    booking = get_booking_by_id(booking_id)
+    fallback_response = _render_checkin_page(booking_data=booking, checkin_booking_id=booking_id)
+    notification_response = _redirect_with_whatsapp(booking_id, booking, fallback_response)
+    if notification_response is fallback_response:
+        flash("Vehicle checked-in successfully", "success")
+    return notification_response
 
 
 @admin_bp.route("/admin/complete/<booking_id>")
@@ -842,6 +618,9 @@ def complete_booking(booking_id):
         flash(message, "error")
         return redirect(url_for("admin.admin_dashboard"))
 
-    log_action("COMPLETED", booking_id, performed_by=admin_id)
-    flash("Vehicle marked completed", "success")
-    return redirect(url_for("admin.admin_dashboard"))
+    booking = get_booking_by_id(booking_id)
+    fallback_response = redirect(url_for("admin.admin_dashboard"))
+    notification_response = _redirect_with_whatsapp(booking_id, booking, fallback_response)
+    if notification_response is fallback_response:
+        flash("Vehicle marked completed", "success")
+    return notification_response

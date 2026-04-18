@@ -200,7 +200,7 @@
         <a href="/admin" class="admin-sidebar-link {% if request.path == '/admin' %}active{% endif %}">
           <span>🏠</span> Dashboard
         </a>
-        <a href="/checkin" class="admin-sidebar-link {% if request.path == '/checkin' %}active{% endif %}">
+        <a href="{{ url_for('admin.admin_checkin_page') }}" class="admin-sidebar-link {% if request.path in ['/checkin', '/admin/checkin'] %}active{% endif %}">
           <span>✅</span> Check-In
         </a>
         <a href="/admin/slots" class="admin-sidebar-link {% if request.path.startswith('/admin/slots') %}active{% endif %}">

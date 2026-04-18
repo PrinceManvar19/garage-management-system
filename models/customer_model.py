@@ -166,16 +166,20 @@ def search_customers(query, limit=5):
     if not normalized_query:
         return []
 
-    search_term = f"%{normalized_query}%"
+    search_term = f"%{normalized_query.upper()}%"
+    normalized_phone = _normalize_phone(normalized_query)
+    phone_search_term = f"%{normalized_phone}%" if normalized_phone else None
     rows = get_db().execute(
         """
         SELECT id, name, phone, vehicle
         FROM customers
-        WHERE id LIKE ? OR phone LIKE ? OR vehicle LIKE ?
+        WHERE UPPER(id) LIKE ?
+           OR UPPER(vehicle) LIKE ?
+           OR (? IS NOT NULL AND phone LIKE ?)
         ORDER BY id ASC
         LIMIT ?
         """,
-        (search_term, search_term, search_term, limit),
+        (search_term, search_term, phone_search_term, phone_search_term, limit),
     ).fetchall()
     return [dict(row) for row in rows]
 
