@@ -173,7 +173,6 @@ function onVehicleSelectAdmin(selectEl) {
         selectEl.removeAttribute('name');
         if (brandModelInput) { brandModelInput.value = ''; brandModelInput.removeAttribute('readonly'); }
     } else {
-        console.log("Selected option:", opt);
         const opt = selectEl.options[selectEl.selectedIndex];
         const brand = opt.getAttribute('data-brand') || '';
         const model = opt.getAttribute('data-model') || '';
