@@ -31,44 +31,23 @@
         </div>
 
         <div class="dash-form-group">
-          <label>Vehicle Number</label>
-          <select id="vehicle-select" name="vehicle_number" required style="text-transform:uppercase;">
-            <option value="">Loading your vehicles...</option>
-          </select>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <label>Vehicle Number</label>
+            <button type="button" id="addVehicleBtnBook" class="dash-btn-secondary" style="padding:0.5rem 1rem; font-size:0.9rem;">
+              <i class="fas fa-plus-circle"></i> Add Vehicle
+            </button>
+          </div>
+          <div id="vehicleListContainerBook" style="border:1px solid #ddd; border-radius:8px; padding:0.75rem; background:#f8f9fa; min-height:50px; display:none;">
+            <div id="vehicleListBook" style="display:flex; flex-direction:column; gap:0.5rem;">
+              <p style="margin:0; color:#6c757d; font-size:0.9rem; text-align:center;">Loading vehicles...</p>
+            </div>
+          </div>
           <input type="hidden" id="vehicle-number-hidden" name="vehicle_number" />
         </div>
 
-<div id="brand-model-group" class="dash-form-group">
+        <div id="brand-model-group" class="dash-form-group">
           <label>Brand / Model</label>
           <input type="text" id="brand-model-input" name="brand_model" placeholder="Brand Model (autofilled)" readonly />
-        </div>
-
-        <div id="new-vehicle-form" class="dash-form-group" style="display:none; margin-top:1rem; padding:1.5rem; border:2px dashed #a20405; border-radius:12px; background:rgba(162,4,5,0.05);">
-          <h4 style="color:#a20405; margin-bottom:1rem; font-size:1.1rem;">
-            <i class="fas fa-plus-circle"></i> Add New Vehicle
-          </h4>
-          <div class="dash-form-row">
-            <div>
-              <label>New Plate Number *</label>
-              <input type="text" id="new-plate" placeholder="GJ01AB1234" style="text-transform:uppercase;" required />
-            </div>
-            <div>
-              <label>New Brand *</label>
-              <input type="text" id="new-brand" placeholder="Honda" required />
-            </div>
-          </div>
-          <div class="dash-form-group">
-            <label>New Model (optional)</label>
-            <input type="text" id="new-model" placeholder="Activa 6G" />
-          </div>
-          <div style="display:flex; gap:1rem;">
-            <button type="button" id="save-new-vehicle" class="dash-btn-primary" style="flex:1;">
-              <i class="fas fa-save"></i> Save Vehicle
-            </button>
-            <button type="button" id="cancel-new-vehicle" class="dash-btn-secondary" style="flex:1;">
-              <i class="fas fa-times"></i> Cancel
-            </button>
-          </div>
         </div>
 
         <div class="dash-form-row">
@@ -96,138 +75,200 @@
           <i class="fas fa-paper-plane"></i> Send Booking Request
         </button>
       </form>
+
+      <!-- Add Vehicle Modal -->
+      <div id="addVehicleModalBook" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:99999; flex-items:center; justify-content:center;">
+        <div style="background:white; border-radius:16px; padding:2rem; max-width:450px; width:90%; margin:auto; margin-top: 2rem; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); box-shadow:0 25px 50px rgba(0,0,0,0.2);">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="margin:0; font-family:'Syne',sans-serif; font-size:1.5rem; font-weight:800; color:#a20405;">Add New Vehicle</h3>
+            <button type="button" id="closeAddVehicleModalBook" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:#6c757d;">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          
+          <div style="margin-bottom:1rem;">
+            <label style="display:block; margin-bottom:0.5rem; font-weight:600;">Plate Number *</label>
+            <input type="text" id="bookNewPlate" placeholder="GJ01AB1234" style="width:100%; padding:0.75rem; border:1px solid #ddd; border-radius:8px; text-transform:uppercase; font-size:0.95rem;" />
+          </div>
+          
+          <div style="margin-bottom:1rem;">
+            <label style="display:block; margin-bottom:0.5rem; font-weight:600;">Brand *</label>
+            <input type="text" id="bookNewBrand" placeholder="Honda" style="width:100%; padding:0.75rem; border:1px solid #ddd; border-radius:8px; font-size:0.95rem;" />
+          </div>
+          
+          <div style="margin-bottom:1rem;">
+            <label style="display:block; margin-bottom:0.5rem; font-weight:600;">Model (Optional)</label>
+            <input type="text" id="bookNewModel" placeholder="Activa 6G" style="width:100%; padding:0.75rem; border:1px solid #ddd; border-radius:8px; font-size:0.95rem;" />
+          </div>
+
+          <div id="addVehicleMessageBook" style="margin-bottom:1rem; padding:0.75rem; border-radius:8px; display:none;"></div>
+
+          <div style="display:flex; gap:0.75rem;">
+            <button type="button" id="bookSaveVehicle" class="dash-btn-primary" style="flex:1; padding:0.75rem;">
+              <i class="fas fa-save"></i> Save Vehicle
+            </button>
+            <button type="button" id="bookCancelVehicle" class="dash-btn-secondary" style="flex:1; padding:0.75rem;">
+              <i class="fas fa-times"></i> Cancel
+            </button>
+          </div>
+        </div>
+      </div>
       
       <script>
-        // NEW: Vehicle dropdown + brand/model auto-fill logic
-        (function() {
-          const customerPhone = "{{ customer.phone or '' }}";
-          const vehicleSelect = document.getElementById('vehicle-select');
-          const vehicleHidden = document.getElementById('vehicle-number-hidden');
-          const brandModelInput = document.getElementById('brand-model-input');
-          
-          if (!customerPhone) {
-            vehicleSelect.innerHTML = '<option value="">Phone not available</option>';
-            return;
-          }
-          
-          // Fetch vehicles
-          fetch(`/api/vehicles/${customerPhone}`)
+      document.addEventListener('DOMContentLoaded', function() {
+        const customerPhone = "{{ customer.phone or '' }}";
+        const vehicleListContainer = document.getElementById('vehicleListContainerBook');
+        const vehicleList = document.getElementById('vehicleListBook');
+        const vehicleHidden = document.getElementById('vehicle-number-hidden');
+        const brandModelInput = document.getElementById('brand-model-input');
+        const addVehicleBtnBook = document.getElementById('addVehicleBtnBook');
+        const addVehicleModalBook = document.getElementById('addVehicleModalBook');
+        const closeAddVehicleModalBook = document.getElementById('closeAddVehicleModalBook');
+        const bookSaveVehicle = document.getElementById('bookSaveVehicle');
+        const bookCancelVehicle = document.getElementById('bookCancelVehicle');
+        const bookNewPlate = document.getElementById('bookNewPlate');
+        const bookNewBrand = document.getElementById('bookNewBrand');
+        const bookNewModel = document.getElementById('bookNewModel');
+        const addVehicleMessageBook = document.getElementById('addVehicleMessageBook');
+
+        if (!customerPhone) {
+          vehicleList.innerHTML = '<p style="margin:0; color:#dc3545; font-size:0.9rem; text-align:center;">Phone number not available</p>';
+          vehicleListContainer.style.display = 'block';
+          return;
+        }
+
+        // Load vehicles
+        function loadVehicles() {
+          fetch('/api/vehicles/' + encodeURIComponent(customerPhone))
             .then(r => r.json())
             .then(data => {
-              if (data.vehicles && data.vehicles.length > 0) {
-                vehicleSelect.innerHTML = '<option value="">Select Vehicle</option>';
-                console.log("API vehicles:", data);
-                console.log("Vehicles loaded:", data.vehicles);
-                data.vehicles.forEach(v => {
-                  const opt = new Option(v.plate_number, v.plate_number);
-                  opt.dataset.brand = v.brand || "";
-                  opt.dataset.model = v.model || "";
-                  vehicleSelect.appendChild(opt);
-                });
-                const newOpt = document.createElement("option");
-                newOpt.value = "__new__";
-                newOpt.textContent = "+ Add New Vehicle";
-                vehicleSelect.appendChild(newOpt);
-                
-                // Auto-select if only 1 vehicle
-                if (data.vehicles.length === 1) {
-                  vehicleSelect.value = data.vehicles[0].plate_number;
-                  vehicleSelect.dispatchEvent(new Event('change'));
-                }
-              } else {
-                vehicleSelect.innerHTML = '<option value="__new__">+ Add New Vehicle</option>';
-                vehicleSelect.value = '__new__';
+              const vehicles = data.vehicles || [];
+              vehicleList.innerHTML = '';
+
+              if (vehicles.length === 0) {
+                vehicleList.innerHTML = '<p style="margin:0; color:#6c757d; font-size:0.9rem; text-align:center;">No vehicles added yet</p>';
+                vehicleListContainer.style.display = 'block';
+                return;
               }
+
+              vehicleListContainer.style.display = 'block';
+              vehicles.forEach(v => {
+                const vehicleItem = document.createElement('div');
+                vehicleItem.style.cssText = 'padding-inline:0.75rem; padding-block:0.25rem; background:white; border:1px solid #dee2e6; border-radius:6px; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:0.75rem;';
+                vehicleItem.innerHTML = `
+                  <input type="radio" name="vehicleOptionBook" value="${v.plate_number}" data-brand="${v.brand}" data-model="${v.model}" style="cursor:pointer;">
+                  <div style="flex:1;">
+                    <div style="font-weight:700; color:#1f2937; text-transform:uppercase;">${v.plate_number}</div>
+                    <div style="font-size:0.85rem; color:#6c757d;">${v.brand}${v.model ? ' ' + v.model : ''}</div>
+                  </div>
+                `;
+                
+                vehicleItem.addEventListener('mouseover', () => {
+                  vehicleItem.style.background = '#f0f0f0';
+                });
+                vehicleItem.addEventListener('mouseout', () => {
+                  vehicleItem.style.background = 'white';
+                });
+                
+                const radio = vehicleItem.querySelector('input[type="radio"]');
+                radio.addEventListener('change', function() {
+                  vehicleHidden.value = this.value;
+                  const brand = this.dataset.brand || '';
+                  const model = this.dataset.model || '';
+                  brandModelInput.value = (brand + ' ' + model).trim();
+                });
+                
+                vehicleList.appendChild(vehicleItem);
+              });
             })
             .catch(() => {
-              vehicleSelect.innerHTML = '<option value="__new__">+ Add New Vehicle (API error)</option>';
+              vehicleList.innerHTML = '<p style="margin:0; color:#dc3545; font-size:0.9rem; text-align:center;">Error loading vehicles</p>';
+              vehicleListContainer.style.display = 'block';
             });
-          
-          // On vehicle change
-          vehicleSelect.addEventListener('change', function() {
-            console.log("Selected:", this.value);
-            const selected = this.value;
-            vehicleHidden.value = selected === '__new__' ? '' : selected;
-            
-            brandModelInput.value = "";
-            brandModelInput.removeAttribute("readonly");
+        }
 
-            if (selected === '__new__') {
-              document.getElementById('brand-model-group').style.display = 'none';
-              document.getElementById('new-vehicle-form').style.display = 'block';
-              document.getElementById('new-plate').focus();
-            } else {
-              document.getElementById('new-vehicle-form').style.display = 'none';
-              document.getElementById('brand-model-group').style.display = 'block';
-              document.getElementById('new-vehicle-form').style.display = 'none';
-              document.getElementById('brand-model-group').style.display = 'block';
-              const selectedOption = this.options[this.selectedIndex];
-              const brand = selectedOption.dataset.brand || "";
-              const model = selectedOption.dataset.model || "";
-              brandModelInput.value = (brand + " " + model).trim();
-              brandModelInput.setAttribute('readonly', true);
-              console.log("Selected option:", selectedOption);
-              console.log("Selected vehicle:", {plate: selected, brand, model});
-            }
-          });
+        // Modal controls
+        addVehicleBtnBook.addEventListener('click', function() {
+          addVehicleModalBook.style.display = 'flex';
+          bookNewPlate.focus();
+          bookNewPlate.value = '';
+          bookNewBrand.value = '';
+          bookNewModel.value = '';
+          addVehicleMessageBook.style.display = 'none';
+        });
 
-          // New vehicle form handlers
-          document.getElementById('save-new-vehicle').addEventListener('click', addNewVehicle);
-          document.getElementById('cancel-new-vehicle').addEventListener('click', function() {
-            document.getElementById('new-vehicle-form').style.display = 'none';
-            document.getElementById('brand-model-group').style.display = 'block';
-            vehicleSelect.value = '';
-            brandModelInput.value = '';
-            vehicleHidden.value = '';
-          });
+        closeAddVehicleModalBook.addEventListener('click', function() {
+          addVehicleModalBook.style.display = 'none';
+        });
 
-          async function addNewVehicle() {
-            const plate = document.getElementById('new-plate').value.trim().toUpperCase();
-            const brand = document.getElementById('new-brand').value.trim();
-            const model = document.getElementById('new-model').value.trim() || '';
+        bookCancelVehicle.addEventListener('click', function() {
+          addVehicleModalBook.style.display = 'none';
+        });
 
-            console.log("Saving vehicle:", {
-                plate: plate,
-                brand: brand
-            });
-            if (!plate || !brand) {
-              alert('Plate and brand required');
-              return;
-            }
-
-            try {
-              const response = await fetch('/api/vehicles/add', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({plate_number: plate, brand, model})
-              });
-              const data = await response.json();
-              console.log("Response:", data);
-
-              if (data.success) {
-                // Add to dropdown
-                const opt = document.createElement('option');
-                opt.value = data.vehicle.plate_number;
-                opt.textContent = data.vehicle.plate_number;
-                opt.dataset.brand = data.vehicle.brand;
-                opt.dataset.model = data.vehicle.model;
-                vehicleSelect.insertBefore(opt, vehicleSelect.querySelector('option[value="__new__"]'));
-                
-                // Select new vehicle
-                vehicleSelect.value = data.vehicle.plate_number;
-                vehicleSelect.dispatchEvent(new Event('change'));
-                
-                console.log('New vehicle added:', data.vehicle);
-              } else {
-                alert(data.message || data.error || 'Failed to add vehicle');
-              }
-            } catch (error) {
-              console.error('Add vehicle error:', error);
-              alert('Network error - try again');
-            }
+        addVehicleModalBook.addEventListener('click', function(e) {
+          if (e.target === addVehicleModalBook) {
+            addVehicleModalBook.style.display = 'none';
           }
-        })();
+        });
 
+        // Save new vehicle
+        bookSaveVehicle.addEventListener('click', async function() {
+          const plate = bookNewPlate.value.trim().toUpperCase();
+          const brand = bookNewBrand.value.trim();
+          const model = bookNewModel.value.trim();
+
+          if (!plate || !brand) {
+            showMessage('Plate number and brand are required', 'error');
+            return;
+          }
+
+          if (!/^[A-Z0-9\s]{4,10}$/.test(plate)) {
+            showMessage('Invalid plate number format', 'error');
+            return;
+          }
+
+          bookSaveVehicle.disabled = true;
+          bookSaveVehicle.textContent = '⏳ Saving...';
+
+          try {
+            const response = await fetch('/api/vehicles/add', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ plate_number: plate, brand, model })
+            });
+            const result = await response.json();
+
+            if (result.success) {
+              showMessage('Vehicle added successfully!', 'success');
+              setTimeout(() => {
+                addVehicleModalBook.style.display = 'none';
+                bookSaveVehicle.disabled = false;
+                bookSaveVehicle.textContent = '💾 Save Vehicle';
+                loadVehicles();
+              }, 1000);
+            } else {
+              showMessage(result.message || result.error || 'Failed to add vehicle', 'error');
+              bookSaveVehicle.disabled = false;
+              bookSaveVehicle.textContent = '💾 Save Vehicle';
+            }
+          } catch (error) {
+            console.error('Error:', error);
+            showMessage('Network error. Please try again.', 'error');
+            bookSaveVehicle.disabled = false;
+            bookSaveVehicle.textContent = '💾 Save Vehicle';
+          }
+        });
+
+        function showMessage(message, type) {
+          addVehicleMessageBook.textContent = message;
+          addVehicleMessageBook.style.display = 'block';
+          addVehicleMessageBook.style.background = type === 'error' ? '#fee' : '#efe';
+          addVehicleMessageBook.style.color = type === 'error' ? '#c33' : '#3c3';
+          addVehicleMessageBook.style.border = `1px solid ${type === 'error' ? '#fcc' : '#cfc'}`;
+        }
+
+        loadVehicles();
+      });
       </script>
     </div>
   </div>
