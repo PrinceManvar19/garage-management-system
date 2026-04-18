@@ -17,19 +17,12 @@ from services.booking_service import (
     get_booking_by_id,
     get_booking_stats,
     mark_whatsapp_sent,
-    normalize_phone,
     reject_booking as reject_booking_service,
 )
 from services.slot_service import get_slots_for_admin, set_slot_total
 from utils.constants import STATUS_APPROVED, STATUS_IN_GARAGE, STATUS_COMPLETED, STATUS_PENDING, STATUS_REJECTED
-from models.customer_model import (
-    ensure_customer,
-    get_customer_by_phone,
-    get_customer_by_id,
-    get_customer_map,
-    search_customers,
-)
-from utils.helpers import format_date_display, format_datetime_display, get_today_date_string, log_action
+from models.customer_model import ensure_customer, get_customer_by_id, get_customer_by_phone, search_customers
+from utils.helpers import format_date_display, format_datetime_display, get_today_date_string, normalize_phone
 
 
 admin_bp = Blueprint("admin", __name__)
@@ -60,12 +53,8 @@ def _build_whatsapp_message(booking):
 
 
 def _csv_response(filename, headers, rows):
-    output = StringIO()
-    writer = csv.writer(output, quoting=csv.QUOTE_ALL)
-    writer.writerow(headers)
-    writer.writerows(rows)
     return Response(
-        output.getvalue(),
+        _csv_string(headers, rows),
         mimetype="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
@@ -225,6 +214,65 @@ def _count_booking_exports(from_date="", to_date="", status="", garage_only=Fals
     return row["total"] if row else 0
 
 
+def _build_export_response(data_type, from_date="", to_date="", status=""):
+    if data_type == "bookings":
+        rows = _fetch_booking_export_rows(from_date, to_date, status)
+        return _csv_response("bookings.csv", BOOKING_EXPORT_HEADERS, _booking_csv_rows(rows))
+
+    if data_type == "customers":
+        rows = _fetch_customer_export_rows()
+        return _csv_response("customers.csv", CUSTOMER_EXPORT_HEADERS, _customer_csv_rows(rows))
+
+    if data_type == "garage":
+        rows = _fetch_booking_export_rows(from_date, to_date, garage_only=True)
+        return _csv_response("garage_data.csv", GARAGE_EXPORT_HEADERS, _garage_csv_rows(rows))
+
+    if data_type == "all":
+        booking_rows = _fetch_booking_export_rows(from_date, to_date, status)
+        customer_rows = _fetch_customer_export_rows()
+        zip_buffer = BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr(
+                "bookings.csv",
+                _csv_string(BOOKING_EXPORT_HEADERS, _booking_csv_rows(booking_rows)),
+            )
+            zip_file.writestr(
+                "customers.csv",
+                _csv_string(CUSTOMER_EXPORT_HEADERS, _customer_csv_rows(customer_rows)),
+            )
+        zip_buffer.seek(0)
+        return Response(
+            zip_buffer.getvalue(),
+            mimetype="application/zip",
+            headers={"Content-Disposition": 'attachment; filename="admin_data_export.zip"'},
+        )
+
+    return None
+
+
+def _handle_walkin_submission(form, default_date):
+    customer_id = form.get("customer_id", "").strip().upper()
+    name = form.get("name", "").strip()
+    phone = form.get("phone", "").strip()
+    vehicle = form.get("vehicle", "").strip().upper()
+    brand_model = form.get("brand_model", "").strip()
+    service = form.get("service", "").strip()
+    date = form.get("date", "").strip() or default_date
+
+    if not all([vehicle, brand_model, service]) or (not customer_id and not all([name, phone])):
+        return False, "Please fill all manual entry fields", None
+
+    return create_manual_booking_with_customer(
+        customer_id,
+        name,
+        phone,
+        vehicle,
+        brand_model,
+        service,
+        date,
+    )
+
+
 def _render_admin_dashboard(filters=None, booking_data=None, checkin_booking_id=""):
     filters = filters or {
         "query": request.args.get("query", ""),
@@ -340,25 +388,12 @@ def admin_walkin():
     today = get_today_date_string()
 
     if request.method == "POST":
-        customer_id = request.form.get("customer_id", "").strip().upper()
-        name = request.form.get("name", "").strip()
-        phone = request.form.get("phone", "").strip()
-        vehicle = request.form.get("vehicle", "").strip().upper()
-        brand_model = request.form.get("brand_model", "").strip()
-        service = request.form.get("service", "").strip()
-        date = request.form.get("date", "").strip() or today
-
-        if not all([vehicle, brand_model, service]) or (not customer_id and not all([name, phone])):
-            flash("Please fill all manual entry fields", "danger")
+        success, message, booking = _handle_walkin_submission(request.form, today)
+        if not success:
+            flash(message, "danger")
         else:
-            success, message, booking = create_manual_booking_with_customer(
-                customer_id, name, phone, vehicle, brand_model, service, date,
-            )
-            if not success:
-                flash(message, "danger")
-            else:
-                flash(f'Walk-in vehicle added to garage as {booking["booking_id"]}', "success")
-                return redirect(url_for("admin.admin_walkin"))
+            flash(f'Walk-in vehicle added to garage as {booking["booking_id"]}', "success")
+            return redirect(url_for("admin.admin_walkin"))
 
     return render_template("admin_walkin.html", today=today)
 
@@ -394,26 +429,7 @@ def export_bookings():
     if not _require_admin():
         return redirect(url_for("main.home"))
 
-    bookings = get_admin_bookings()
-    rows = [
-        [
-            _normalize_csv_value(booking.get("booking_id", "")),
-            _normalize_csv_value(booking.get("customer_id", "")),
-            _normalize_csv_value(booking.get("name", "")),
-            _normalize_csv_value(booking.get("phone", "")),
-            _normalize_csv_value(booking.get("vehicle", "")),
-            _normalize_csv_value(booking.get("service", "")),
-            _format_csv_date(booking.get("date", "")),
-            _normalize_csv_value(booking.get("status", "")),
-            _format_csv_datetime(booking.get("created_at", "")),
-        ]
-        for booking in bookings
-    ]
-    return _csv_response(
-        "bookings.csv",
-        ["booking_id", "customer_id", "name", "phone", "vehicle", "service", "date", "status", "created_at"],
-        rows,
-    )
+    return _build_export_response("bookings")
 
 
 @admin_bp.route("/export/garage")
@@ -421,24 +437,7 @@ def export_garage():
     if not _require_admin():
         return redirect(url_for("main.home"))
 
-    bookings = [booking for booking in get_admin_bookings() if booking.get("status") == STATUS_IN_GARAGE]
-    rows = [
-        [
-            _normalize_csv_value(booking.get("booking_id", "")),
-            _normalize_csv_value(booking.get("name", "")),
-            _normalize_csv_value(booking.get("phone", "")),
-            _normalize_csv_value(booking.get("vehicle", "")),
-            _normalize_csv_value(booking.get("service", "")),
-            _format_csv_date(booking.get("date", "")),
-            _format_csv_datetime(booking.get("checked_in_at", "")),
-        ]
-        for booking in bookings
-    ]
-    return _csv_response(
-        "garage_data.csv",
-        ["booking_id", "name", "phone", "vehicle", "service", "date", "checked_in_at"],
-        rows,
-    )
+    return _build_export_response("garage")
 
 
 @admin_bp.route("/admin/set-slots", methods=["POST"])
@@ -508,7 +507,6 @@ def admin_checkin_booking(booking_id):
     success, message, booking = checkin_vehicle(booking_id, get_today_date_string())
     flash(message if not success else "Vehicle checked-in successfully", "danger" if not success else "success")
     booking_data = get_booking_by_id(booking_id) if success else (enrich_booking(booking) if booking else None)
-    # CHANGED: Keep the same action URL but return to the Check-In page/sidebar context.
     return _render_checkin_page(booking_data=booking_data, checkin_booking_id=booking_id)
 
 
@@ -545,54 +543,7 @@ def export_data():
     if not _require_admin():
         return redirect(url_for("main.home"))
 
-    import zipfile
-    from io import BytesIO
-
-    zip_buffer = BytesIO()
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        customer_map = get_customer_map()
-        customer_rows = [
-            [
-                _normalize_csv_value(customer.get("id")),
-                _normalize_csv_value(customer.get("name")),
-                _normalize_csv_value(customer.get("phone")),
-                _normalize_csv_value(customer.get("vehicle")),
-            ]
-            for customer in customer_map.values()
-        ]
-        customer_csv_content = StringIO()
-        customer_writer = csv.writer(customer_csv_content, quoting=csv.QUOTE_ALL)
-        customer_writer.writerow(["id", "name", "phone", "vehicle"])
-        customer_writer.writerows(customer_rows)
-        zip_file.writestr("customers_export.csv", customer_csv_content.getvalue())
-
-        bookings = get_admin_bookings()
-        booking_rows = [
-            [
-                _normalize_csv_value(booking.get("booking_id", "")),
-                _normalize_csv_value(booking.get("customer_id", "")),
-                _normalize_csv_value(booking.get("name", "")),
-                _normalize_csv_value(booking.get("phone", "")),
-                _normalize_csv_value(booking.get("vehicle", "")),
-                _normalize_csv_value(booking.get("service", "")),
-                _format_csv_date(booking.get("date", "")),
-                _normalize_csv_value(booking.get("status", "")),
-                _format_csv_datetime(booking.get("created_at", "")),
-            ]
-            for booking in bookings
-        ]
-        bookings_csv_content = StringIO()
-        bookings_writer = csv.writer(bookings_csv_content, quoting=csv.QUOTE_ALL)
-        bookings_writer.writerow(["booking_id", "customer_id", "name", "phone", "vehicle", "service", "date", "status", "created_at"])
-        bookings_writer.writerows(booking_rows)
-        zip_file.writestr("bookings_export.csv", bookings_csv_content.getvalue())
-
-    zip_buffer.seek(0)
-    return Response(
-        zip_buffer.getvalue(),
-        mimetype="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="admin_data_export.zip"'}
-    )
+    return _build_export_response("all")
 
 
 @admin_bp.route("/checkin", methods=["GET", "POST"])
@@ -602,7 +553,6 @@ def checkin():
 
     today = get_today_date_string()
     verified_booking = None
-    # CHANGED: /checkin GET can pre-load a booking and always renders queue + garage data.
     checkin_booking_id = request.args.get("checkin_booking_id", "").strip().upper()
 
     if request.method == "GET" and checkin_booking_id:
@@ -636,24 +586,12 @@ def checkin():
                 flash("Vehicle checked-in successfully", "success")
 
         elif action == "manual_entry":
-            customer_id = request.form.get("customer_id", "").strip().upper()
-            name = request.form.get("name", "").strip()
-            phone = request.form.get("phone", "").strip()
-            vehicle = request.form.get("vehicle", "").strip().upper()
-            brand_model = request.form.get("brand_model", "").strip()
-            service = request.form.get("service", "").strip()
-
-            if not all([vehicle, brand_model, service]) or (not customer_id and not all([name, phone])):
-                flash("Please fill all manual entry fields", "danger")
+            success, message, booking = _handle_walkin_submission(request.form, today)
+            if not success:
+                flash(message, "danger")
             else:
-                success, message, booking = create_manual_booking_with_customer(
-                    customer_id, name, phone, vehicle, brand_model, service, today,
-                )
-                if not success:
-                    flash(message, "danger")
-                else:
-                    verified_booking = enrich_booking(booking)
-                    flash(f'Walk-in vehicle added to garage as {booking["booking_id"]}', "success")
+                verified_booking = enrich_booking(booking)
+                flash(f'Walk-in vehicle added to garage as {booking["booking_id"]}', "success")
 
     return _render_checkin_page(booking_data=verified_booking, checkin_booking_id=checkin_booking_id)
 
@@ -787,39 +725,10 @@ def export_download():
     if not data_type:
         return "data_type is required", 400
 
-    if data_type == "bookings":
-        rows = _fetch_booking_export_rows(from_date, to_date, status)
-        return _csv_response("bookings.csv", BOOKING_EXPORT_HEADERS, _booking_csv_rows(rows))
-
-    if data_type == "customers":
-        rows = _fetch_customer_export_rows()
-        return _csv_response("customers.csv", CUSTOMER_EXPORT_HEADERS, _customer_csv_rows(rows))
-
-    if data_type == "garage":
-        rows = _fetch_booking_export_rows(from_date, to_date, garage_only=True)
-        return _csv_response("garage_data.csv", GARAGE_EXPORT_HEADERS, _garage_csv_rows(rows))
-
-    if data_type == "all":
-        booking_rows = _fetch_booking_export_rows(from_date, to_date, status)
-        customer_rows = _fetch_customer_export_rows()
-        zip_buffer = BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-            zip_file.writestr(
-                "bookings.csv",
-                _csv_string(BOOKING_EXPORT_HEADERS, _booking_csv_rows(booking_rows)),
-            )
-            zip_file.writestr(
-                "customers.csv",
-                _csv_string(CUSTOMER_EXPORT_HEADERS, _customer_csv_rows(customer_rows)),
-            )
-        zip_buffer.seek(0)
-        return Response(
-            zip_buffer.getvalue(),
-            mimetype="application/zip",
-            headers={"Content-Disposition": 'attachment; filename="admin_data_export.zip"'},
-        )
-
-    return "Invalid data_type", 400
+    response = _build_export_response(data_type, from_date, to_date, status)
+    if response is None:
+        return "Invalid data_type", 400
+    return response
 
 
 @admin_bp.route("/admin/complete/<booking_id>")
@@ -842,6 +751,5 @@ def complete_booking(booking_id):
         flash(message, "error")
         return redirect(url_for("admin.admin_dashboard"))
 
-    log_action("COMPLETED", booking_id, performed_by=admin_id)
     flash("Vehicle marked completed", "success")
     return redirect(url_for("admin.admin_dashboard"))

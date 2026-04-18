@@ -228,7 +228,7 @@
           }
 
           bookSaveVehicle.disabled = true;
-          bookSaveVehicle.textContent = '⏳ Saving...';
+          bookSaveVehicle.textContent = 'Saving...';
 
           try {
             const response = await fetch('/api/vehicles/add', {
@@ -243,19 +243,19 @@
               setTimeout(() => {
                 addVehicleModalBook.style.display = 'none';
                 bookSaveVehicle.disabled = false;
-                bookSaveVehicle.textContent = '💾 Save Vehicle';
+                bookSaveVehicle.textContent = 'Save Vehicle';
                 loadVehicles();
               }, 1000);
             } else {
               showMessage(result.message || result.error || 'Failed to add vehicle', 'error');
               bookSaveVehicle.disabled = false;
-              bookSaveVehicle.textContent = '💾 Save Vehicle';
+              bookSaveVehicle.textContent = 'Save Vehicle';
             }
           } catch (error) {
             console.error('Error:', error);
             showMessage('Network error. Please try again.', 'error');
             bookSaveVehicle.disabled = false;
-            bookSaveVehicle.textContent = '💾 Save Vehicle';
+            bookSaveVehicle.textContent = 'Save Vehicle';
           }
         });
 

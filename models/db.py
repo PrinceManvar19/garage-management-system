@@ -278,4 +278,3 @@ def init_app(app):
     app.teardown_appcontext(close_db)
     with app.app_context():
         init_db()
-        migrate_json_data()

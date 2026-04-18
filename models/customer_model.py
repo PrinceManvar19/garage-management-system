@@ -2,17 +2,10 @@ import re
 import sqlite3
 
 from models.db import get_db
+from utils.helpers import log_action, normalize_phone
 
 
 # CHANGED: Admin split pages need reusable customer creation and lookup helpers.
-def _normalize_phone(phone):
-    normalized = (phone or "").strip().replace("+91", "")
-    normalized = re.sub(r"\D", "", normalized)
-    if len(normalized) > 10 and normalized.startswith("91"):
-        normalized = normalized[-10:]
-    return normalized
-
-
 def _generate_customer_id():
     rows = get_db().execute("SELECT id FROM customers WHERE id LIKE 'CUST%'").fetchall()
     highest = 1000
@@ -46,7 +39,7 @@ def find_customer(name, phone, vehicle):
 
 
 def get_customer_by_phone(phone):
-    normalized_phone = _normalize_phone(phone)
+    normalized_phone = normalize_phone(phone)
     row = get_db().execute(
         "SELECT id, name, phone, vehicle FROM customers WHERE phone = ?",
         (normalized_phone,),
@@ -57,7 +50,7 @@ def get_customer_by_phone(phone):
 # CHANGED: Login now uses the requested phone-or-customer-id lookup in one query.
 def get_customer_by_phone_or_id(identifier):
     normalized_identifier = (identifier or "").strip()
-    normalized_phone = _normalize_phone(normalized_identifier)
+    normalized_phone = normalize_phone(normalized_identifier)
     normalized_customer_id = normalized_identifier.upper()
 
     try:
@@ -70,25 +63,17 @@ def get_customer_by_phone_or_id(identifier):
             """,
             (normalized_phone, normalized_customer_id),
         ).fetchone()
-        result = dict(row) if row else None
-        print("LOGIN QUERY RESULT:", result)
-        return result
+        return dict(row) if row else None
     except Exception as error:
-        print("LOGIN DB ERROR:", error)
+        log_action("LOGIN DB ERROR", str(error))
         return None
 
 
 # CHANGED: Registration now creates a real customer row with a unique phone number.
 def create_customer(name, phone, vehicle):
-    print("REGISTRATION RUNS")
     normalized_name = (name or "").strip()
-    normalized_phone = _normalize_phone(phone)
+    normalized_phone = normalize_phone(phone)
     normalized_vehicle = (vehicle or "").strip().upper()
-    print("REGISTRATION DATA BEFORE INSERT:", {
-        "name": normalized_name,
-        "phone": normalized_phone,
-        "vehicle": normalized_vehicle,
-    })
 
     if not all([normalized_name, normalized_phone, normalized_vehicle]):
         return False, "All fields are required.", None
@@ -97,9 +82,8 @@ def create_customer(name, phone, vehicle):
 
     try:
         existing = get_customer_by_phone(normalized_phone)
-        print("REGISTRATION DUPLICATE CHECK:", existing)
     except Exception as error:
-        print("REGISTRATION DUPLICATE CHECK ERROR:", error)
+        log_action("REGISTRATION DUPLICATE CHECK ERROR", str(error))
         return False, "Registration failed. Please try again.", None
 
     if existing:
@@ -123,11 +107,11 @@ def create_customer(name, phone, vehicle):
         get_db().commit()
     except sqlite3.IntegrityError:
         get_db().rollback()
-        print("REGISTRATION DB ERROR: duplicate phone")
+        log_action("REGISTRATION DB ERROR", "duplicate phone")
         return False, "Phone already registered", None
     except Exception as error:
         get_db().rollback()
-        print("REGISTRATION DB ERROR:", error)
+        log_action("REGISTRATION DB ERROR", str(error))
         return False, "Registration failed. Please try again.", None
 
     return True, "", customer
@@ -135,7 +119,7 @@ def create_customer(name, phone, vehicle):
 
 # CHANGED: Used by /admin/add-customer and walk-in registration.
 def ensure_customer(phone, name, vehicle):
-    normalized_phone = _normalize_phone(phone)
+    normalized_phone = normalize_phone(phone)
     normalized_name = (name or "").strip()
     normalized_vehicle = (vehicle or "").strip().upper()
 

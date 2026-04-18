@@ -84,7 +84,9 @@
       <div class="dash-form-row">
         <div class="dash-form-group">
           <label>Vehicle Number</label>
-          <input type="text" id="vehicle-input" name="vehicle" placeholder="Enter vehicle number" required style="text-transform:uppercase;" />
+          <div id="vehicle-field-wrapper">
+            <input type="text" id="vehicle-input" name="vehicle" placeholder="Enter vehicle number" required style="text-transform:uppercase;" />
+          </div>
         </div>
         <div class="dash-form-group">
           <label>Date</label>
@@ -131,8 +133,7 @@
   }
 
   function loadVehiclesForCustomer(identifier) {
-    const vehicleSelect = document.getElementById('vehicle-select-admin');
-    const vehicleInput = document.getElementById('vehicle-input');
+    const vehicleFieldWrapper = document.getElementById('vehicle-field-wrapper');
 
     fetch('/api/vehicles/' + encodeURIComponent(identifier))
         .then(res => {
@@ -140,23 +141,24 @@
             return res.json();
         })
         .then(data => {
-            console.log("API vehicles:", data);
             const vehicles = data.vehicles || [];
-            // Build select element
-            let selectHTML = '<select id="vehicle-select-admin" name="vehicle" required onchange="onVehicleSelectAdmin(this)" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;font-size:14px;">';
+            let selectHTML = '<select id="vehicle-select-admin" name="vehicle" required style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;font-size:14px;">';
             vehicles.forEach(v => {
                 selectHTML += `<option value="${v.plate_number}" data-brand="${v.brand}" data-model="${v.model}">${v.plate_number}</option>`;
             });
             selectHTML += '<option value="__new__">+ Add New Vehicle</option>';
             selectHTML += '</select>';
 
-            // Replace vehicle input with select
-            vehicleInput.outerHTML = selectHTML;
+            vehicleFieldWrapper.innerHTML = selectHTML;
 
-            // Auto-select if only one
             const newSelect = document.getElementById('vehicle-select-admin');
+            newSelect.addEventListener('change', function() {
+                onVehicleSelectAdmin(this);
+            });
             if (vehicles.length === 1) {
                 newSelect.value = vehicles[0].plate_number;
+                onVehicleSelectAdmin(newSelect);
+            } else {
                 onVehicleSelectAdmin(newSelect);
             }
         })
@@ -167,21 +169,24 @@
 
 function onVehicleSelectAdmin(selectEl) {
     const brandModelInput = document.querySelector('input[name="brand_model"]');
+    const manualInput = document.getElementById('new-vehicle-input');
     if (selectEl.value === '__new__') {
-        // Show text input for manual entry
-        selectEl.insertAdjacentHTML('afterend', '<input type="text" id="new-vehicle-input" name="vehicle" placeholder="Enter plate e.g. GJ01AB1234" style="width:100%;padding:8px;margin-top:6px;border:1px solid #ccc;border-radius:6px;" required>');
+        if (!manualInput) {
+            selectEl.insertAdjacentHTML('afterend', '<input type="text" id="new-vehicle-input" name="vehicle" placeholder="Enter plate e.g. GJ01AB1234" style="width:100%;padding:8px;margin-top:6px;border:1px solid #ccc;border-radius:6px;text-transform:uppercase;" required>');
+        }
         selectEl.removeAttribute('name');
-        if (brandModelInput) { brandModelInput.value = ''; brandModelInput.removeAttribute('readonly'); }
+        if (brandModelInput) {
+            brandModelInput.value = '';
+            brandModelInput.removeAttribute('readonly');
+        }
     } else {
-        console.log("Selected option:", opt);
         const opt = selectEl.options[selectEl.selectedIndex];
         const brand = opt.getAttribute('data-brand') || '';
         const model = opt.getAttribute('data-model') || '';
         if (brandModelInput) {
             brandModelInput.value = (brand + ' ' + model).trim();
+            brandModelInput.setAttribute('readonly', 'readonly');
         }
-        // Remove manual input if it exists
-        const manualInput = document.getElementById('new-vehicle-input');
         if (manualInput) manualInput.remove();
         selectEl.setAttribute('name', 'vehicle');
     }

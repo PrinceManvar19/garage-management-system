@@ -2,6 +2,7 @@ from flask import Blueprint, flash, redirect, render_template, request, session,
 
 from models.customer_model import create_customer, find_customer
 from services.auth_service import login_user_by_identifier, set_user_session
+from utils.helpers import log_action
 
 
 auth_bp = Blueprint("auth", __name__)
@@ -20,7 +21,7 @@ def login():
                 endpoint = "admin.admin_dashboard" if user["role"] == "admin" else "customer.dashboard"
                 return redirect(url_for(endpoint))
         except Exception as error:
-            print("LOGIN ROUTE ERROR:", error)
+            log_action("LOGIN ROUTE ERROR", str(error))
             flash("Login failed. Please try again.", "error")
             return redirect(url_for("auth.login"))
 
@@ -40,7 +41,7 @@ def register():
                 request.form.get("vehicle", ""),
             )
         except Exception as error:
-            print("REGISTRATION ROUTE ERROR:", error)
+            log_action("REGISTRATION ROUTE ERROR", str(error))
             flash("Registration failed. Please try again.", "error")
             return redirect(url_for("auth.register"))
 

@@ -187,7 +187,7 @@
     color: #15803d;
   }
 
-  .status-pill.checked_in {
+  .status-pill.in_garage {
     background: rgba(59, 130, 246, 0.14);
     color: #1d4ed8;
   }
@@ -404,8 +404,8 @@
             <td><strong>{{ b.booking_id }}</strong></td>
             <td>{{ b.date }}</td>
             <td>
-              <span class="status-pill {{ booking_status if booking_status in ['pending', 'approved', 'checked_in', 'rejected', 'completed'] else 'other' }}">
-                {% if booking_status == 'checked_in' %}
+              <span class="status-pill {{ booking_status if booking_status in ['pending', 'approved', 'in_garage', 'rejected', 'completed'] else 'other' }}">
+                {% if booking_status == 'in_garage' %}
                   In Progress 🔧
                 {% elif booking_status == 'completed' %}
                   Completed ✅
@@ -413,7 +413,7 @@
                   {{ b.status_display or b.status }}
                 {% endif %}
               </span>
-              {% if booking_status == 'checked_in' %}
+              {% if booking_status == 'in_garage' %}
               <div class="verify-hint">Service is in progress{% if b.checked_in_at %} since {{ b.checked_in_at }}{% endif %}.</div>
               {% elif booking_status == 'completed' %}
               <div class="verify-hint">Service completed{% if b.completed_at %} on {{ b.completed_at }}{% endif %}.</div>
@@ -558,7 +558,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
 
       dashboardSaveVehicle.disabled = true;
-      dashboardSaveVehicle.textContent = '⏳ Saving...';
+      dashboardSaveVehicle.textContent = 'Saving...';
 
       try {
         const response = await fetch('/api/vehicles/add', {
@@ -573,19 +573,19 @@ document.addEventListener('DOMContentLoaded', function() {
           setTimeout(() => {
             addVehicleModal.style.display = 'none';
             dashboardSaveVehicle.disabled = false;
-            dashboardSaveVehicle.textContent = '💾 Save Vehicle';
+            dashboardSaveVehicle.textContent = 'Save Vehicle';
             loadVehicles();
           }, 1000);
         } else {
           showMessage(result.message || result.error || 'Failed to add vehicle', 'error');
           dashboardSaveVehicle.disabled = false;
-          dashboardSaveVehicle.textContent = '💾 Save Vehicle';
+          dashboardSaveVehicle.textContent = 'Save Vehicle';
         }
       } catch (error) {
         console.error('Error:', error);
         showMessage('Network error. Please try again.', 'error');
         dashboardSaveVehicle.disabled = false;
-        dashboardSaveVehicle.textContent = '💾 Save Vehicle';
+        dashboardSaveVehicle.textContent = 'Save Vehicle';
       }
     });
 
@@ -616,19 +616,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function formatStatusClass(status) {
     const lower = (status || 'pending').toLowerCase();
-    if (lower === 'pending' || lower === 'approved' || lower === 'checked_in' || lower === 'rejected' || lower === 'completed') {
+    if (lower === 'pending' || lower === 'approved' || lower === 'in_garage' || lower === 'rejected' || lower === 'completed') {
       return lower;
     }
     return 'other';
   }
 
-  function getStatusDisplay(status) {
+function getStatusDisplay(status) {
     const lower = (status || 'pending').toLowerCase();
     if (lower === 'pending') {
       return 'Waiting for Approval';
     }
     if (lower === 'approved') {
       return 'Approved ✅';
+    }
+    if (lower === 'in_garage') {
+      return 'In Progress 🔧';
     }
     if (lower === 'rejected') {
       return 'Rejected ❌';
@@ -639,25 +642,7 @@ document.addEventListener('DOMContentLoaded', function() {
     return status;
   }
 
-  function getStatusDisplay(status) {
-    const lower = (status || 'pending').toLowerCase();
-    if (lower === 'pending') {
-      return 'Waiting for Approval';
-    }
-    if (lower === 'approved') {
-      return 'Approved';
-    }
-    if (lower === 'checked_in') {
-      return 'In Progress 🔧';
-    }
-    if (lower === 'rejected') {
-      return 'Rejected';
-    }
-    if (lower === 'completed') {
-      return 'Completed ✅';
-    }
-    return status;
-  }
+
 
   function appendBookingToHistory(bookingId, date, service, status) {
     if (emptyBookingsText) {

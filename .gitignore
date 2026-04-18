@@ -4,6 +4,7 @@ __pycache__/
 
 # Database
 *.db
+*.db-journal
 
 # Environment
 .env
@@ -14,3 +15,8 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+
+# App artifacts
+backup/
+logs.txt
+data/*_updated.json

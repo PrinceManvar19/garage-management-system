@@ -12,7 +12,7 @@ from models.booking_model import (
     update_booking_status,
     update_whatsapp_sent,
 )
-from models.customer_model import get_customer_by_id, get_customer_by_phone, get_customer_map
+from models.customer_model import get_customer_by_id, get_customer_map
 from models.db import get_db
 from services.slot_service import get_slot_availability
 from utils.constants import (
@@ -26,6 +26,8 @@ from utils.helpers import (
     format_date_display,
     format_datetime_display,
     get_status_display,
+    log_action,
+    normalize_phone,
     parse_datetime,
     sort_bookings_newest_first,
 )
@@ -46,15 +48,6 @@ def enrich_booking(booking, customer_map=None):
     enriched["formatted_checked_in_at"] = format_datetime_display(enriched.get("checked_in_at"))
     enriched["formatted_completed_at"] = format_datetime_display(enriched.get("completed_at"))
     return enriched
-
-
-def normalize_phone(phone):
-    normalized = (phone or "").strip()
-    normalized = normalized.replace("+91", "")
-    normalized = re.sub(r"\D", "", normalized)
-    if len(normalized) > 10 and normalized.startswith("91"):
-        normalized = normalized[-10:]
-    return normalized
 
 
 def generate_unique_booking_id(prefix):
@@ -137,7 +130,6 @@ def create_booking_for_customer(customer_id, name, phone, vehicle, brand_model, 
 
     is_valid, message = _validate_booking_input(customer_id, phone, vehicle.strip().upper(), service.strip(), date.strip())
     if not is_valid:
-        from utils.helpers import log_action
         log_action("BOOKING VALIDATION FAILED", f"{customer_id} - {message}")
         return False, message, None
     customer = get_customer_by_id(customer_id.strip().upper())
@@ -169,16 +161,12 @@ def create_booking_for_customer(customer_id, name, phone, vehicle, brand_model, 
             return False, "All slots are booked for this date.", None
         create_booking(booking)
         get_db().commit()
-        from utils.helpers import log_action
-        log_action("BOOKING CREATED", f"{booking['booking_id']} - {name}")
     except sqlite3.Error as e:
         get_db().rollback()
-        from utils.helpers import log_action
         log_action("BOOKING ERROR SQLITE", f"{booking.get('booking_id', 'unknown')} - {str(e)}")
         return False, "Booking could not be saved right now. Please try again.", None
     except Exception as e:
         get_db().rollback()
-        from utils.helpers import log_action
         log_action("BOOKING ERROR", f"{booking.get('booking_id', 'unknown')} - {str(e)}")
         return False, "Unexpected error occurred. Please try again.", None
     return True, "", booking
@@ -196,7 +184,7 @@ def create_manual_booking(name, phone, vehicle, brand_model, service, date, perf
         "booking_id": generate_unique_booking_id("MANUAL"),
         "customer_id": "",
         "name": name.strip(),
-"phone": normalized_phone,  # CHANGED: Use normalized phone
+        "phone": normalized_phone,
         "vehicle": vehicle.strip().upper(),
         "brand_model": brand_model.strip(),
         "service": service.strip(),
@@ -222,7 +210,6 @@ def create_manual_booking_with_customer(customer_id, name, phone, vehicle, brand
     if normalized_customer_id:
         customer = get_customer_by_id(normalized_customer_id)
         if not customer:
-            from utils.helpers import log_action
             log_action("WALKIN CUSTOMER NOT FOUND", f"{customer_id}")
             return False, "Customer ID was not found.", None
         name = customer.get("name", name)
@@ -355,7 +342,6 @@ def checkin_vehicle(booking_id, today, performed_by=None):
             return False, "Booking must be approved before check-in.", booking
         update_booking_status(booking_id, STATUS_IN_GARAGE, checked_in_at, None)
         get_db().commit()
-        from utils.helpers import log_action
         log_action("CHECK-IN", booking_id, performed_by)
     except sqlite3.Error:
         get_db().rollback()
@@ -382,7 +368,6 @@ def complete_booking_by_id(booking_id, performed_by=None):
             return False, "Only checked-in vehicles can be marked complete.", booking
         update_booking_status(booking_id, STATUS_COMPLETED, booking.get("checked_in_at"), completed_at, 0)
         get_db().commit()
-        from utils.helpers import log_action
         log_action("COMPLETED", booking_id, performed_by)
     except sqlite3.Error:
         get_db().rollback()

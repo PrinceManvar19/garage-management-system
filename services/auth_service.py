@@ -2,6 +2,7 @@ from flask import session
 
 from models.admin_model import get_admin_by_id
 from models.customer_model import get_customer_by_id, get_customer_by_phone_or_id
+from utils.helpers import log_action
 
 
 def set_user_session(user_id, name, role, phone=""):
@@ -53,12 +54,11 @@ def login_user_by_id(user_id):
 # CHANGED: Login can now resolve a user from phone number or existing Customer/Admin ID.
 def login_user_by_identifier(identifier):
     normalized_identifier = (identifier or "").strip()
-    print("LOGIN RUNS:", normalized_identifier)
 
     try:
         customer = get_customer_by_phone_or_id(normalized_identifier)
     except Exception as error:
-        print("LOGIN ERROR:", error)
+        log_action("LOGIN ERROR", str(error))
         return None
 
     if customer:
@@ -71,10 +71,9 @@ def login_user_by_identifier(identifier):
 
     try:
         admin = get_admin_by_id(normalized_identifier.upper())
-        print("ADMIN LOGIN QUERY RESULT:", admin)
         if admin:
             return {"id": admin["id"], "name": admin["name"], "phone": "", "role": "admin"}
     except Exception as error:
-        print("ADMIN LOGIN ERROR:", error)
+        log_action("ADMIN LOGIN ERROR", str(error))
 
     return None

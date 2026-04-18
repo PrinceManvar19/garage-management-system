@@ -5,6 +5,7 @@ from models.db import get_db
 from models.customer_model import get_customer_by_id, get_customer_by_phone, get_vehicles_by_customer
 from services.booking_service import create_booking_for_customer, get_customer_dashboard_data
 from services.slot_service import get_next_14_days
+from utils.helpers import log_action
 
 
 customer_bp = Blueprint("customer", __name__)
@@ -20,7 +21,6 @@ def api_vehicles(identifier):
 @customer_bp.route("/api/vehicles/add", methods=["POST"])
 def api_add_vehicle():
     """NEW: Add new vehicle for logged-in customer"""
-    print("Session:", dict(session))
     customer_id = session.get("customer_id")
     if not customer_id:
         phone = session.get("phone")
@@ -30,9 +30,7 @@ def api_add_vehicle():
     
     if not customer_id:
         return jsonify({"success": False, "message": "Customer not found"}), 400
-    
-    print("Customer ID:", customer_id)
-    
+
     data = request.get_json()
     if not data:
         return jsonify({"success": False, "message": "Invalid JSON"}), 400
@@ -69,7 +67,7 @@ def api_add_vehicle():
             return jsonify({"success": False, "message": "Vehicle already exists"}), 409
     except Exception as e:
         db.rollback()
-        print(f"ADD VEHICLE ERROR: {e}")
+        log_action("ADD VEHICLE ERROR", str(e))
         return jsonify({"success": False, "message": "Database error"}), 500
 
 
