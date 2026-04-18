@@ -21,7 +21,14 @@ from services.booking_service import (
 )
 from services.slot_service import get_slots_for_admin, set_slot_total
 from utils.constants import STATUS_APPROVED, STATUS_IN_GARAGE, STATUS_COMPLETED, STATUS_PENDING, STATUS_REJECTED
-from models.customer_model import ensure_customer, get_customer_by_id, get_customer_by_phone, search_customers
+from models.customer_model import (
+    add_vehicle_to_customer,
+    ensure_customer,
+    get_customer_by_id,
+    get_customer_by_phone,
+    get_customer_with_vehicles,
+    search_customers,
+)
 from utils.helpers import format_date_display, format_datetime_display, get_today_date_string, normalize_phone
 
 
@@ -254,13 +261,36 @@ def _handle_walkin_submission(form, default_date):
     customer_id = form.get("customer_id", "").strip().upper()
     name = form.get("name", "").strip()
     phone = form.get("phone", "").strip()
-    vehicle = form.get("vehicle", "").strip().upper()
+    vehicle = (
+        form.get("vehicle_number", "").strip().upper()
+        or form.get("vehicle", "").strip().upper()
+    )
+    vehicle_brand = form.get("vehicle_brand", "").strip()
+    vehicle_model = form.get("vehicle_model", "").strip()
     brand_model = form.get("brand_model", "").strip()
     service = form.get("service", "").strip()
     date = form.get("date", "").strip() or default_date
 
-    if not all([vehicle, brand_model, service]) or (not customer_id and not all([name, phone])):
+    if not all([vehicle, brand_model, service]) or not all([name, phone]):
         return False, "Please fill all manual entry fields", None
+
+    normalized_phone = normalize_phone(phone)
+    if not normalized_phone:
+        return False, "Phone number must be exactly 10 digits.", None
+
+    customer = get_customer_by_id(customer_id) if customer_id else None
+    if not customer:
+        customer = get_customer_by_phone(normalized_phone)
+
+    if customer:
+        customer_id = customer.get("id", "")
+        name = customer.get("name", name)
+        phone = customer.get("phone", normalized_phone)
+    else:
+        customer = ensure_customer(normalized_phone, name, vehicle, vehicle_brand, vehicle_model)
+        customer_id = customer.get("id", "")
+        name = customer.get("name", name)
+        phone = customer.get("phone", normalized_phone)
 
     return create_manual_booking_with_customer(
         customer_id,
@@ -614,6 +644,44 @@ def find_customer():
     return jsonify({"found": False})
 
 
+@admin_bp.route("/admin/get-vehicles")
+def admin_get_vehicles():
+    if not _require_admin():
+        return jsonify({"error": "unauthorized"}), 403
+
+    phone = normalize_phone(request.args.get("phone", "").strip())
+    customer_id = request.args.get("customer_id", "").strip().upper()
+    identifier = phone or customer_id
+
+    if not identifier:
+        return jsonify({"found": False, "customer": None, "vehicles": []}), 400
+
+    lookup = get_customer_with_vehicles(identifier)
+    if not lookup:
+        return jsonify({"found": False, "customer": None, "vehicles": []})
+
+    customer = lookup["customer"]
+    vehicles = [
+        {
+            "plate": vehicle.get("plate_number", ""),
+            "plate_number": vehicle.get("plate_number", ""),
+            "brand": vehicle.get("brand", ""),
+            "model": vehicle.get("model", ""),
+        }
+        for vehicle in lookup["vehicles"]
+    ]
+    return jsonify({
+        "found": True,
+        "customer": {
+            "id": customer.get("id", ""),
+            "customer_id": customer.get("id", ""),
+            "name": customer.get("name", ""),
+            "phone": customer.get("phone", ""),
+        },
+        "vehicles": vehicles,
+    })
+
+
 @admin_bp.route("/admin/find-customer-by-id")
 def find_customer_by_id():
     if not _require_admin():
@@ -660,6 +728,8 @@ def add_customer():
     name = payload.get("name", "").strip()
     phone = normalize_phone(payload.get("phone", "").strip())
     vehicle = payload.get("vehicle", "").strip().upper()
+    brand = payload.get("brand", "").strip()
+    model = payload.get("model", "").strip()
 
     if not all([name, phone, vehicle]):
         return jsonify({"success": False, "error": "Name, phone, and vehicle are required."}), 400
@@ -667,7 +737,7 @@ def add_customer():
         return jsonify({"success": False, "error": "Phone number must be exactly 10 digits."}), 400
 
     try:
-        customer = ensure_customer(phone, name, vehicle)
+        customer = ensure_customer(phone, name, vehicle, brand, model)
     except Exception:
         get_db().rollback()
         return jsonify({"success": False, "error": "Customer could not be saved right now."}), 500
@@ -680,6 +750,66 @@ def add_customer():
             "phone": customer.get("phone", ""),
             "vehicle": customer.get("vehicle", ""),
         },
+    })
+
+
+@admin_bp.route("/admin/add-vehicle", methods=["POST"])
+def admin_add_vehicle():
+    if not _require_admin():
+        return jsonify({"success": False, "error": "unauthorized"}), 403
+
+    payload = request.get_json(silent=True) or request.form
+    customer_id = payload.get("customer_id", "").strip().upper()
+    phone = normalize_phone(payload.get("phone", "").strip())
+    plate_number = (payload.get("plate_number") or payload.get("plate") or "").strip().upper()
+    brand = payload.get("brand", "").strip()
+    model = payload.get("model", "").strip()
+
+    if not plate_number:
+        return jsonify({"success": False, "error": "Vehicle number is required."}), 400
+    if not brand:
+        return jsonify({"success": False, "error": "Brand is required."}), 400
+
+    customer = get_customer_by_id(customer_id) if customer_id else None
+    if not customer and phone:
+        customer = get_customer_by_phone(phone)
+    if not customer:
+        return jsonify({"success": False, "error": "Customer not found for this phone number."}), 400
+
+    try:
+        vehicle = add_vehicle_to_customer(customer.get("id", ""), plate_number, brand, model)
+    except ValueError as error:
+        return jsonify({"success": False, "error": str(error)}), 400
+    except Exception:
+        get_db().rollback()
+        return jsonify({"success": False, "error": "Vehicle could not be saved right now."}), 500
+
+    lookup = get_customer_with_vehicles(customer.get("id", ""))
+    vehicles = [
+        {
+            "plate": item.get("plate_number", ""),
+            "plate_number": item.get("plate_number", ""),
+            "brand": item.get("brand", ""),
+            "model": item.get("model", ""),
+        }
+        for item in (lookup or {}).get("vehicles", [])
+    ]
+
+    return jsonify({
+        "success": True,
+        "customer": {
+            "id": customer.get("id", ""),
+            "customer_id": customer.get("id", ""),
+            "name": customer.get("name", ""),
+            "phone": customer.get("phone", ""),
+        },
+        "vehicle": {
+            "plate": vehicle.get("plate_number", ""),
+            "plate_number": vehicle.get("plate_number", ""),
+            "brand": vehicle.get("brand", ""),
+            "model": vehicle.get("model", ""),
+        },
+        "vehicles": vehicles,
     })
 
 

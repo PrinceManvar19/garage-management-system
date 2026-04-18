@@ -69,8 +69,104 @@ def get_customer_by_phone_or_id(identifier):
         return None
 
 
+def _get_vehicles_for_customer_id(customer_id):
+    rows = get_db().execute(
+        """
+        SELECT plate_number, brand, model
+        FROM vehicles
+        WHERE customer_id = ?
+        ORDER BY plate_number ASC
+        """,
+        (customer_id,),
+    ).fetchall()
+    vehicles = [dict(row) for row in rows]
+
+    if vehicles:
+        return vehicles
+
+    customer = get_customer_by_id(customer_id)
+    legacy_vehicle = (customer or {}).get("vehicle", "").strip().upper()
+    if not legacy_vehicle:
+        return []
+
+    return [{"plate_number": legacy_vehicle, "brand": "", "model": ""}]
+
+
+def _set_primary_vehicle_if_missing(customer_id, plate_number):
+    customer = get_customer_by_id(customer_id)
+    if not customer:
+        return
+
+    current_vehicle = (customer.get("vehicle") or "").strip().upper()
+    normalized_plate = (plate_number or "").strip().upper()
+    if current_vehicle or not normalized_plate:
+        return
+
+    get_db().execute(
+        "UPDATE customers SET vehicle = ? WHERE id = ?",
+        (normalized_plate, customer_id),
+    )
+
+
+def _upsert_vehicle_record(db, customer_id, plate_number, brand="", model=""):
+    normalized_plate = (plate_number or "").strip().upper()
+    normalized_brand = (brand or "").strip()
+    normalized_model = (model or "").strip()
+
+    if not normalized_plate:
+        raise ValueError("Vehicle number is required.")
+    if not re.fullmatch(r"^[A-Z0-9\s-]{4,15}$", normalized_plate):
+        raise ValueError("Invalid vehicle number format.")
+
+    existing_vehicle = db.execute(
+        """
+        SELECT plate_number, customer_id, brand, model
+        FROM vehicles
+        WHERE plate_number = ?
+        """,
+        (normalized_plate,),
+    ).fetchone()
+
+    if existing_vehicle:
+        if existing_vehicle["customer_id"] != customer_id:
+            raise ValueError("Vehicle number plate is already linked to another customer.")
+
+        next_brand = normalized_brand or (existing_vehicle["brand"] or "")
+        next_model = normalized_model or (existing_vehicle["model"] or "")
+        db.execute(
+            """
+            UPDATE vehicles
+            SET brand = ?, model = ?
+            WHERE plate_number = ?
+            """,
+            (next_brand, next_model, normalized_plate),
+        )
+        _set_primary_vehicle_if_missing(customer_id, normalized_plate)
+        return {
+            "plate_number": normalized_plate,
+            "brand": next_brand,
+            "model": next_model,
+            "created": False,
+        }
+
+    db.execute(
+        """
+        INSERT INTO vehicles (plate_number, customer_id, brand, model)
+        VALUES (?, ?, ?, ?)
+        """,
+        (normalized_plate, customer_id, normalized_brand, normalized_model),
+    )
+    _set_primary_vehicle_if_missing(customer_id, normalized_plate)
+    return {
+        "plate_number": normalized_plate,
+        "brand": normalized_brand,
+        "model": normalized_model,
+        "created": True,
+    }
+
+
 # CHANGED: Registration now creates a real customer row with a unique phone number.
-def create_customer(name, phone, vehicle):
+def create_customer(name, phone, vehicle, brand="", model=""):
     normalized_name = (name or "").strip()
     normalized_phone = normalize_phone(phone)
     normalized_vehicle = (vehicle or "").strip().upper()
@@ -104,6 +200,7 @@ def create_customer(name, phone, vehicle):
             """,
             (customer["id"], customer["name"], customer["phone"], customer["vehicle"]),
         )
+        _upsert_vehicle_record(get_db(), customer["id"], normalized_vehicle, brand, model)
         get_db().commit()
     except sqlite3.IntegrityError:
         get_db().rollback()
@@ -118,14 +215,17 @@ def create_customer(name, phone, vehicle):
 
 
 # CHANGED: Used by /admin/add-customer and walk-in registration.
-def ensure_customer(phone, name, vehicle):
+def ensure_customer(phone, name, vehicle, brand="", model=""):
     normalized_phone = normalize_phone(phone)
     normalized_name = (name or "").strip()
     normalized_vehicle = (vehicle or "").strip().upper()
 
     existing = get_customer_by_phone(normalized_phone)
     if existing:
-        return existing
+        if normalized_vehicle:
+            _upsert_vehicle_record(get_db(), existing["id"], normalized_vehicle, brand, model)
+            get_db().commit()
+        return get_customer_by_id(existing["id"]) or existing
 
     customer = {
         "id": _generate_customer_id(),
@@ -140,6 +240,8 @@ def ensure_customer(phone, name, vehicle):
         """,
         (customer["id"], customer["name"], customer["phone"], customer["vehicle"]),
     )
+    if normalized_vehicle:
+        _upsert_vehicle_record(get_db(), customer["id"], normalized_vehicle, brand, model)
     get_db().commit()
     return customer
 
@@ -169,14 +271,30 @@ def get_vehicles_by_customer(identifier):
     customer = get_customer_by_phone_or_id(identifier)
     if not customer:
         return []
-    
-    db = get_db()
-    rows = db.execute(
-        "SELECT plate_number, brand, model FROM vehicles WHERE customer_id = ?", 
-        (customer['id'],)
-    ).fetchall()
-    
-    return [dict(row) for row in rows]
+
+    return _get_vehicles_for_customer_id(customer["id"])
+
+
+def get_customer_with_vehicles(identifier):
+    customer = get_customer_by_phone_or_id(identifier)
+    if not customer:
+        return None
+
+    return {
+        "customer": customer,
+        "vehicles": _get_vehicles_for_customer_id(customer["id"]),
+    }
+
+
+def add_vehicle_to_customer(customer_id, plate_number, brand="", model=""):
+    normalized_customer_id = (customer_id or "").strip().upper()
+    customer = get_customer_by_id(normalized_customer_id)
+    if not customer:
+        raise ValueError("Customer not found.")
+
+    vehicle = _upsert_vehicle_record(get_db(), normalized_customer_id, plate_number, brand, model)
+    get_db().commit()
+    return vehicle
 
 
 def get_customer_map():

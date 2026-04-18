@@ -172,7 +172,7 @@ def create_booking_for_customer(customer_id, name, phone, vehicle, brand_model, 
     return True, "", booking
 
 
-def create_manual_booking(name, phone, vehicle, brand_model, service, date, performed_by=None):  # CHANGED: Call normalize_phone()
+def create_manual_booking(name, phone, vehicle, brand_model, service, date, customer_id="", performed_by=None):  # CHANGED: Call normalize_phone()
     normalized_phone = normalize_phone(phone)  # CHANGED: Normalize per specs before validation
     if not normalized_phone:
         return False, "Phone number must be exactly 10 digits.", None
@@ -182,7 +182,7 @@ def create_manual_booking(name, phone, vehicle, brand_model, service, date, perf
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     booking = {
         "booking_id": generate_unique_booking_id("MANUAL"),
-        "customer_id": "",
+        "customer_id": (customer_id or "").strip().upper(),
         "name": name.strip(),
         "phone": normalized_phone,
         "vehicle": vehicle.strip().upper(),
@@ -223,7 +223,15 @@ def create_manual_booking_with_customer(customer_id, name, phone, vehicle, brand
             return False, "Phone number must be exactly 10 digits.", None
         phone = normalized_phone
 
-    return create_manual_booking(name, phone, vehicle, brand_model, service, date)
+    return create_manual_booking(
+        name,
+        phone,
+        vehicle,
+        brand_model,
+        service,
+        date,
+        customer_id=normalized_customer_id,
+    )
 
 
 def get_admin_bookings(filters=None):

@@ -1,8 +1,7 @@
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for, jsonify
 import re
-from models.db import get_db
 
-from models.customer_model import get_customer_by_id, get_customer_by_phone, get_vehicles_by_customer
+from models.customer_model import add_vehicle_to_customer, get_customer_by_id, get_customer_by_phone, get_vehicles_by_customer
 from services.booking_service import create_booking_for_customer, get_customer_dashboard_data
 from services.slot_service import get_next_14_days
 from utils.helpers import log_action
@@ -46,28 +45,12 @@ def api_add_vehicle():
         return jsonify({"success": False, "message": "Brand required"}), 400
 
     try:
-        db = get_db()
-        cursor = db.execute(
-            """
-            INSERT INTO vehicles (plate_number, customer_id, brand, model)
-            VALUES (?, ?, ?, ?)
-            """,
-            (plate_number, customer_id, brand, model)
-        )
-        db.commit()
-
-        if cursor.rowcount > 0:
-            vehicle = {
-                "plate_number": plate_number,
-                "brand": brand,
-                "model": model
-            }
-            return jsonify({"success": True, "vehicle": vehicle})
-        else:
-            return jsonify({"success": False, "message": "Vehicle already exists"}), 409
-    except Exception as e:
-        db.rollback()
-        log_action("ADD VEHICLE ERROR", str(e))
+        vehicle = add_vehicle_to_customer(customer_id, plate_number, brand, model)
+        return jsonify({"success": True, "vehicle": vehicle})
+    except ValueError as error:
+        return jsonify({"success": False, "message": str(error)}), 400
+    except Exception as error:
+        log_action("ADD VEHICLE ERROR", str(error))
         return jsonify({"success": False, "message": "Database error"}), 500
 
 
