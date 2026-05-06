@@ -89,6 +89,33 @@ def init_db():
             created_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS workers (
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            phone TEXT,
+            monthly_salary REAL
+        );
+
+        CREATE TABLE IF NOT EXISTS salary_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            worker_id TEXT,
+            month TEXT,
+            year INTEGER,
+            total_days INTEGER,
+            attended_days REAL,
+            per_day_salary REAL,
+            base_salary REAL,
+            bonus REAL,
+            overtime REAL,
+            commission REAL,
+            total_salary REAL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (worker_id) REFERENCES workers(id),
+            UNIQUE(worker_id, month, year)
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_workers_phone_unique ON workers(phone) WHERE phone IS NOT NULL AND phone <> '';
+
         CREATE UNIQUE INDEX IF NOT EXISTS idx_booking_id ON bookings(booking_id);
         CREATE INDEX IF NOT EXISTS idx_booking_status ON bookings(status);
         CREATE INDEX IF NOT EXISTS idx_booking_date ON bookings(date);

@@ -199,6 +199,12 @@
         <a href="/admin/export" class="admin-sidebar-link {% if request.path.startswith('/admin/export') %}active{% endif %}">
           <i class="fas fa-file-export"></i> Export Data
         </a>
+        <a href="/admin/salary/workers" class="admin-sidebar-link {% if request.path.startswith('/admin/salary') and not request.path.startswith('/admin/salary/history') %}active{% endif %}">
+          <i class="fas fa-users"></i> Workers
+        </a>
+        <a href="/admin/salary/history" class="admin-sidebar-link {% if request.path.startswith('/admin/salary/history') %}active{% endif %}">
+          <i class="fas fa-history"></i> Salary History
+        </a>
       </nav>
 
       <a href="/logout" class="admin-sidebar-link admin-sidebar-logout">

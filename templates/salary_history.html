@@ -1,0 +1,132 @@
+{% extends "admin_base.html" %}
+{% block title %}Salary History - Admin{% endblock %}
+
+{% block content %}
+<div class="dashboard-wrap">
+  <div class="dash-header">
+    <div>
+      <h1 class="dash-title">
+        <i class="fas fa-history"></i> Salary History
+      </h1>
+      <p class="dash-sub">View all salary records, filter by worker/month/year, download PDFs, edit records.</p>
+    </div>
+  </div>
+
+  <div class="dash-card">
+    <div class="section-header">
+      <h2 class="dash-card-title">Salary Records ({{ records|length }})</h2>
+    </div>
+
+    <!-- Quick Filters -->
+    <div class="admin-quick-filters mb-3">
+      <a href="{{ url_for('salary.salary_history') }}" class="admin-quick-filter quick-filter-chip {% if not filters %}active{% endif %}">All</a>
+      <a href="?year={{ config.CURRENT_YEAR or 2024 }}" class="admin-quick-filter quick-filter-chip">This Year</a>
+    </div>
+
+    <!-- Filter Form -->
+    <form method="GET" action="{{ url_for('salary.salary_history') }}" class="dash-form mb-4">
+      <div style="display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap;">
+        <div style="flex:1; min-width:200px;">
+          <label>Worker</label>
+          <select name="worker_id" class="form-select">
+            <option value="">All Workers</option>
+            {% for w in workers %}
+            <option value="{{ w.id }}" {% if filters.worker_id == w.id %}selected{% endif %}>{{ w.id }} - {{ w.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="min-width:120px;">
+          <label>Month</label>
+          <select name="month" class="form-select">
+            <option value="">All Months</option>
+            {% for m in range(1,13) %}
+            <option value="{{ '%02d'|format(m) }}" {% if filters.month == '%02d'|format(m) %}selected{% endif %}>
+              {% if m == 1 %}Jan
+              {% elif m == 2 %}Feb
+              {% elif m == 3 %}Mar
+              {% elif m == 4 %}Apr
+              {% elif m == 5 %}May
+              {% elif m == 6 %}Jun
+              {% elif m == 7 %}Jul
+              {% elif m == 8 %}Aug
+              {% elif m == 9 %}Sep
+              {% elif m == 10 %}Oct
+              {% elif m == 11 %}Nov
+              {% else %}Dec{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="min-width:120px;">
+          <label>Year</label>
+          <input type="number" name="year" class="form-control" min="2020" max="2030" value="{{ filters.year or '' }}" placeholder="YYYY">
+        </div>
+        <div style="display:flex; gap:0.5rem; align-items:flex-end;">
+          <button type="submit" class="dash-btn-primary">
+            <i class="fas fa-search"></i> Filter
+          </button>
+          <a href="{{ url_for('salary.salary_history') }}" class="dash-btn-secondary">
+            <i class="fas fa-rotate-left"></i> Reset
+          </a>
+        </div>
+      </div>
+    </form>
+
+    {% if records %}
+    <div class="table-responsive">
+      <table class="dash-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Worker</th>
+            <th>Period</th>
+            <th>Days (Att/Total)</th>
+            <th>Per Day</th>
+            <th>Total Salary</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in records %}
+          <tr>
+            <td><strong>#{{ r.id }}</strong></td>
+            <td>
+              <div><strong>{{ r.worker_id }}</strong></div>
+              {% if r.worker_name %}<small>{{ r.worker_name }}</small>{% endif %}
+              {% if r.worker_phone %}<br><small>{{ r.worker_phone }}</small>{% endif %}
+            </td>
+            <td>{{ r.month }}/{{ r.year }}</td>
+            <td>{{ r.attended_days }} / {{ r.total_days }}</td>
+            <td>₹{{ "%.2f"|format(r.per_day_salary|float) }}</td>
+            <td><strong>₹{{ "%.2f"|format(r.total_salary|float) }}</strong></td>
+            <td>
+              <div class="btn-group" role="group">
+                <a href="{{ url_for('salary.salary_pdf', record_id=r.id) }}" 
+                   class="btn btn-sm btn-outline-primary loading-btn" 
+                   data-loading-text="Generating PDF..."
+                   title="Download PDF Payslip">
+                  <i class="fas fa-file-pdf"></i> PDF
+                </a>
+                <a href="{{ url_for('salary.edit_salary_record', record_id=r.id) }}" 
+                   class="btn btn-sm btn-outline-success loading-btn"
+                   data-loading-text="Loading...">
+                  <i class="fas fa-edit"></i> Edit
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-8 dash-empty-state">
+      <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+      <h4>No salary records found</h4>
+      <p class="text-muted">{% if filters %}No records match your filters.{% else %}Create salary records via Workers > Calculator.{% endif %}</p>
+      <a href="{{ url_for('salary.salary_calculator') }}" class="btn btn-primary mt-2">+ Calculate Salary</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
