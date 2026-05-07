@@ -1,0 +1,233 @@
+{% extends "admin_base.html" %}
+{% block title %}Salary Calculator - Admin{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Salary Calculator</h2>
+    <p class="text-muted mb-4">Select worker and inputs for live salary breakdown.</p>
+
+    <div class="card">
+        <div class="card-header">
+            <h5>Calculate Salary</h5>
+        </div>
+        <div class="card-body">
+            <form id="salaryForm" method="POST">
+                <input type="hidden" name="month" id="month">
+                <input type="hidden" name="year" id="year">
+                <div class="row">
+                    <div class="col-md-6">
+                        <label for="worker_id" class="form-label">Worker</label>
+                        <select class="form-select" id="worker_id" name="worker_id" required>
+                            <option value="">Select Worker...</option>
+                            {% for w in workers %}
+                            <option value="{{ w.id }}" data-name="{{ w.name }}" data-monthly="{{ w.monthly_salary }}">{{ w.id }} - {{ w.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Monthly Salary</label>
+                        <input type="text" class="form-control bg-light" id="monthly_salary" readonly>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Worker Name</label>
+                        <input type="text" class="form-control bg-light" id="worker_name" readonly>
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <label for="total_days" class="form-label">Total Days</label>
+                        <input type="number" class="form-control" id="total_days" name="total_days" min="1" value="26" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="attended_days" class="form-label">Attended Days</label>
+                        <input type="number" class="form-control" id="attended_days" name="attended_days" step="0.5" min="0" value="24" required>
+                    </div>
+                </div>
+
+                <div class="row mt-4">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Per Day Salary:</label>
+                        <div class="h4 text-primary mb-0" id="per_day_salary">₹0.00</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Base Salary:</label>
+                        <div class="h4 text-success mb-0" id="base_salary">₹0.00</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Total Salary:</label>
+                        <div class="h3 fw-bold text-info mb-0" id="total_salary">₹0.00</div>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- Bonus -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <h6><i class="fas fa-gift text-warning"></i> Bonus</h6>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input bonus-type" type="radio" name="bonus_type" id="bonus_pct" value="pct" checked>
+                            <label class="form-check-label" for="bonus_pct">%</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input bonus-type" type="radio" name="bonus_type" id="bonus_amt" value="amt">
+                            <label class="form-check-label" for="bonus_amt">Amount</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="number" step="0.01" class="form-control" id="bonus_value" name="bonus_value" value="0" min="0">
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">Amount:</label>
+                        <div class="h5 text-warning mb-0" id="bonus_amount">₹0.00</div>
+                    </div>
+                </div>
+
+                <!-- Overtime -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <h6><i class="fas fa-clock text-info"></i> Overtime</h6>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input ot-type" type="radio" name="ot_type" id="ot_pct" value="pct" checked>
+                            <label class="form-check-label" for="ot_pct">%</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input ot-type" type="radio" name="ot_type" id="ot_amt" value="amt">
+                            <label class="form-check-label" for="ot_amt">Amount</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="number" step="0.01" class="form-control" id="ot_value" name="ot_value" value="0" min="0">
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">Amount:</label>
+                        <div class="h5 text-info mb-0" id="ot_amount">₹0.00</div>
+                    </div>
+                </div>
+
+                <!-- Commission -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <h6><i class="fas fa-percentage text-success"></i> Commission</h6>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input comm-type" type="radio" name="comm_type" id="comm_pct" value="pct" checked>
+                            <label class="form-check-label" for="comm_pct">%</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input comm-type" type="radio" name="comm_type" id="comm_amt" value="amt">
+                            <label class="form-check-label" for="comm_amt">Amount</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="number" step="0.01" class="form-control" id="comm_value" name="comm_value" value="0" min="0">
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">Amount:</label>
+                        <div class="h5 text-success mb-0" id="comm_amount">₹0.00</div>
+                    </div>
+                </div>
+
+                <div class="text-end">
+<button type="submit" class="btn btn-success btn-lg" data-loading-submit data-loading-text="Saving...">
+                        <i class="fas fa-save"></i> Save Salary Record
+                    </button>
+<button type="button" class="btn btn-outline-primary btn-lg ms-2" onclick="downloadPDF()" data-loading-text="Generating...">
+                        <i class="fas fa-download"></i> Download PDF Payslip
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentMonthly = 0;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const inputs = ['total_days', 'attended_days', 'bonus_value', 'ot_value', 'comm_value'];
+    inputs.forEach(id => {
+        document.getElementById(id).addEventListener('input', calculate);
+    });
+    
+    document.querySelectorAll('.bonus-type, .ot-type, .comm-type').forEach(radio => {
+        radio.addEventListener('change', calculate);
+    });
+    
+    document.getElementById('worker_id').addEventListener('change', loadWorker);
+});
+
+function loadWorker() {
+    const select = document.getElementById('worker_id');
+    const option = select.options[select.selectedIndex];
+    if (option.value) {
+        currentMonthly = parseFloat(option.dataset.monthly) || 0;
+        document.getElementById('monthly_salary').value = '₹' + currentMonthly.toLocaleString('en-IN', {maximumFractionDigits: 0});
+        document.getElementById('worker_name').value = option.dataset.name;
+        calculate();
+    } else {
+        currentMonthly = 0;
+        document.getElementById('monthly_salary').value = '';
+        document.getElementById('worker_name').value = '';
+        calculate();
+    }
+}
+
+function calculate() {
+    const totalDays = parseInt(document.getElementById('total_days').value) || 0;
+    const attendedDays = Math.min(parseInt(document.getElementById('attended_days').value) || 0, totalDays);
+    const bonusPct = document.querySelector('input[name="bonus_type"]:checked').value === 'pct';
+    const bonusVal = parseFloat(document.getElementById('bonus_value').value) || 0;
+    const otPct = document.querySelector('input[name="ot_type"]:checked').value === 'pct';
+    const otVal = parseFloat(document.getElementById('ot_value').value) || 0;
+    const commPct = document.querySelector('input[name="comm_type"]:checked').value === 'pct';
+    const commVal = parseFloat(document.getElementById('comm_value').value) || 0;
+
+    // Update attended
+    document.getElementById('attended_days').value = attendedDays;
+
+    const perDay = totalDays > 0 ? currentMonthly / totalDays : 0;
+    const base = perDay * attendedDays;
+
+    const bonusAmt = bonusPct ? (bonusVal / 100) * currentMonthly : bonusVal;
+    const otAmt = otPct ? (otVal / 100) * currentMonthly : otVal;
+    const commAmt = commPct ? (commVal / 100) * currentMonthly : commVal;
+
+    const total = base + bonusAmt + otAmt + commAmt;
+
+    document.getElementById('per_day_salary').textContent = '₹' + perDay.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    document.getElementById('base_salary').textContent = '₹' + base.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    document.getElementById('bonus_amount').textContent = '₹' + bonusAmt.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    document.getElementById('ot_amount').textContent = '₹' + otAmt.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    document.getElementById('comm_amount').textContent = '₹' + commAmt.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    document.getElementById('total_salary').textContent = '₹' + total.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function downloadPDF() {
+    const recordId = document.getElementById('last_record_id') ? document.getElementById('last_record_id').value : prompt('Enter salary record ID (shown after save):', '1');
+    if (recordId) {
+        window.location.href = '/admin/salary/' + recordId + '/pdf';
+    }
+}
+
+// Auto-set month/year before submit
+document.getElementById('salaryForm').addEventListener('submit', function() {
+    const now = new Date();
+    document.getElementById('month').value = String(now.getMonth() + 1).padStart(2, '0');
+    document.getElementById('year').value = now.getFullYear();
+});
+</script>
+
+<style>
+#salaryForm input:invalid {
+    border-color: #dc3545;
+}
+.h3, .h4, .h5 { font-weight: 600; }
+</style>
+{% endblock %}

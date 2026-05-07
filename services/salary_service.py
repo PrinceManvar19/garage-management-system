@@ -20,7 +20,7 @@ def _convert_bonus(value: Union[float, int, str], is_percent: bool, base: Decima
     if amt < 0:
         amt = Decimal('0')
     if is_percent:
-        return (amt / Decimal('100')) * base
+        return (base * amt) / Decimal('100')
     return amt
 
 
@@ -58,9 +58,9 @@ def calculate_salary(
     per_day = monthly_salary / Decimal(total_days_dec)
     base_salary = per_day * Decimal(attended_days)
     
-    bonus_amt = _convert_bonus(bonus[0], bonus[1], monthly_salary)
-    overtime_amt = _convert_bonus(overtime[0], overtime[1], monthly_salary)
-    commission_amt = _convert_bonus(commission[0], commission[1], monthly_salary)
+    bonus_amt = _convert_bonus(bonus[0], bonus[1], base_salary)
+    overtime_amt = _convert_bonus(overtime[0], overtime[1], base_salary)
+    commission_amt = _convert_bonus(commission[0], commission[1], base_salary)
     
     total = base_salary + bonus_amt + overtime_amt + commission_amt
     

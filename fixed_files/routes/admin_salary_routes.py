@@ -1,9 +1,6 @@
-import calendar
-import datetime
-
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
-from models.worker_model import create_worker, delete_worker, generate_next_worker_id, get_all_workers, get_worker, update_worker
+from models.worker_model import create_worker, delete_worker, get_all_workers, get_worker, update_worker
 from models.salary_model import get_salary_records, get_salary_record, update_salary_record
 
 
@@ -34,9 +31,8 @@ def workers():
         name = request.form.get("name", "").strip()
         phone = request.form.get("phone", "").strip()
         monthly_salary = request.form.get("monthly_salary", "").strip()
-        worker_status = request.form.get("worker_status", "active").strip()
 
-        success, message, worker = create_worker(worker_id, name, phone, monthly_salary, worker_status)
+        success, message, worker = create_worker(worker_id, name, phone, monthly_salary)
         if success:
             flash("Worker added successfully!", "success")
             return redirect(url_for("salary.workers"))
@@ -44,11 +40,7 @@ def workers():
             flash(message, "error")
 
     workers_list = get_all_workers()
-    return render_template(
-        "admin_worker_management.html",
-        workers=workers_list,
-        next_worker_id=generate_next_worker_id(),
-    )
+    return render_template("admin_worker_management.html", workers=workers_list)
 
 @salary_bp.route("/", methods=["GET", "POST"])
 def salary_calculator():
@@ -57,16 +49,6 @@ def salary_calculator():
         return admin_guard
 
     workers_list = get_all_workers()
-    now = datetime.datetime.now()
-    current_total_days = calendar.monthrange(now.year, now.month)[1]
-    year_options = list(range(now.year - 2, now.year + 3))
-    days_by_period = {
-        str(year): {
-            f"{month:02d}": calendar.monthrange(year, month)[1]
-            for month in range(1, 13)
-        }
-        for year in year_options
-    }
 
     if request.method == "POST":
         worker_id = request.form.get("worker_id", "").strip()
@@ -104,31 +86,21 @@ def salary_calculator():
         month = request.form.get("month", "").strip()
         year = request.form.get("year", "").strip()
         year = int(year) if year.isdigit() else None
-        salary_status = request.form.get("salary_status", "finalized").strip()
 
         from models.salary_model import save_salary_record
         success, message, record_id = save_salary_record(
             worker_id, total_days, attended_days, bonus_val, bonus_pct,
             ot_val, ot_pct, comm_val, comm_pct,
             month=month if month else None,
-            year=year,
-            salary_status=salary_status
+            year=year
         )
         if success:
-            flash(f"Salary record saved. Payslip download started for record #{record_id}.", "success")
-            return redirect(url_for("salary.salary_pdf", record_id=record_id))
+            flash(f"Salary record saved! Record ID: {record_id}", "success")
+            return redirect(url_for("salary.salary_history"))
         else:
             flash(message, "error")
 
-    return render_template(
-        "admin_salary.html",
-        workers=workers_list,
-        current_month=f"{now.month:02d}",
-        current_year=now.year,
-        current_total_days=current_total_days,
-        year_options=year_options,
-        days_by_period=days_by_period,
-    )
+    return render_template("admin_salary.html", workers=workers_list)
 
 
 @salary_bp.route("/history", methods=["GET", "POST"])
@@ -189,7 +161,6 @@ def edit_salary_record(record_id):
     bonus_pct = request.form.get("bonus_type") == "pct"
     ot_pct = request.form.get("ot_type") == "pct"
     comm_pct = request.form.get("comm_type") == "pct"
-    salary_status = request.form.get("salary_status", "finalized").strip()
     
     success, message = update_salary_record(
         record_id,
@@ -200,8 +171,7 @@ def edit_salary_record(record_id):
         ot_val=ot_val,
         ot_pct=ot_pct,
         comm_val=comm_val,
-        comm_pct=comm_pct,
-        salary_status=salary_status
+        comm_pct=comm_pct
     )
     if success:
         flash(message, "success")
@@ -241,9 +211,8 @@ def edit_worker(worker_id):
         name = request.form.get("name", "").strip()
         phone = request.form.get("phone", "").strip()
         monthly_salary = request.form.get("monthly_salary", "").strip()
-        worker_status = request.form.get("worker_status", "active").strip()
 
-        success, message = update_worker(worker_id, name, phone, monthly_salary, worker_status)
+        success, message = update_worker(worker_id, name, phone, monthly_salary)
         if success:
             flash("Worker updated successfully!", "success")
             return redirect(url_for("salary.workers"))

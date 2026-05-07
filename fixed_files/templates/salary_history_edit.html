@@ -1,0 +1,208 @@
+{% extends "admin_base.html" %}
+{% block title %}Edit Salary Record - Admin{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex align-items-center mb-4">
+    <a href="{{ url_for('salary.salary_history') }}" class="btn btn-secondary me-2">
+      <i class="fas fa-arrow-left"></i> Back to History
+    </a>
+    <h2>Edit Salary Record #{{ record.id }}</h2>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h5>{{ record.worker_id }} - {{ record.worker_name or 'Unknown' }} ({{ record.month }}/{{ record.year }})</h5>
+    </div>
+    <div class="card-body">
+      <form method="POST" id="editSalaryForm">
+        <div class="row">
+          <div class="col-md-6">
+            <label class="form-label">Total Days</label>
+            <input type="number" class="form-control" name="total_days" id="total_days" value="{{ record.total_days }}" min="1" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Attended Days</label>
+            <input type="number" class="form-control" name="attended_days" id="attended_days" value="{{ record.attended_days }}" min="0" max="{{ record.total_days }}" step="0.5" required>
+          </div>
+        </div>
+
+        <hr>
+
+        <!-- Bonus -->
+        <h6 class="mb-3"><i class="fas fa-gift text-warning"></i> Bonus</h6>
+        <div class="row mb-4">
+          <div class="col-md-3">
+            <div class="form-check form-check-inline">
+              <input class="form-check-input bonus-type" type="radio" name="bonus_type" id="bonus_pct" value="pct">
+              <label class="form-check-label" for="bonus_pct">%</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input bonus-type" type="radio" name="bonus_type" id="bonus_amt" value="amt">
+              <label class="form-check-label" for="bonus_amt">Amount</label>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <input type="number" step="0.01" class="form-control" name="bonus_value" id="bonus_value" value="0" min="0">
+          </div>
+          <div class="col-md-5">
+            <label class="form-label">Calculated Amount:</label>
+            <div class="h5 text-warning mb-0" id="bonus_display">₹0.00</div>
+          </div>
+        </div>
+
+        <!-- Overtime -->
+        <h6 class="mb-3"><i class="fas fa-clock text-info"></i> Overtime</h6>
+        <div class="row mb-4">
+          <div class="col-md-3">
+            <div class="form-check form-check-inline">
+              <input class="form-check-input ot-type" type="radio" name="ot_type" id="ot_pct" value="pct">
+              <label class="form-check-label" for="ot_pct">%</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input ot-type" type="radio" name="ot_type" id="ot_amt" value="amt">
+              <label class="form-check-label" for="ot_amt">Amount</label>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <input type="number" step="0.01" class="form-control" name="ot_value" id="ot_value" value="0" min="0">
+          </div>
+          <div class="col-md-5">
+            <label class="form-label">Calculated Amount:</label>
+            <div class="h5 text-info mb-0" id="ot_display">₹0.00</div>
+          </div>
+        </div>
+
+        <!-- Commission -->
+        <h6 class="mb-3"><i class="fas fa-percentage text-success"></i> Commission</h6>
+        <div class="row mb-4">
+          <div class="col-md-3">
+            <div class="form-check form-check-inline">
+              <input class="form-check-input comm-type" type="radio" name="comm_type" id="comm_pct" value="pct">
+              <label class="form-check-label" for="comm_pct">%</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input comm-type" type="radio" name="comm_type" id="comm_amt" value="amt">
+              <label class="form-check-label" for="comm_amt">Amount</label>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <input type="number" step="0.01" class="form-control" name="comm_value" id="comm_value" value="0" min="0">
+          </div>
+          <div class="col-md-5">
+            <label class="form-label">Calculated Amount:</label>
+            <div class="h5 text-success mb-0" id="comm_display">₹0.00</div>
+          </div>
+        </div>
+
+        <hr>
+
+        <!-- Live Calculation Summary -->
+        <div class="row mt-3">
+          <div class="col-md-4">
+            <label class="form-label fw-bold">Per Day Salary:</label>
+            <div class="h5 text-primary mb-0" id="per_day_display">₹0.00</div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-bold">Base Salary:</label>
+            <div class="h4 text-success mb-0" id="base_display">₹0.00</div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-bold">Total Salary:</label>
+            <div class="h3 fw-bold text-dark mb-0" id="total_display">₹0.00</div>
+          </div>
+        </div>
+
+        <hr>
+
+        <div class="text-end">
+          <a href="{{ url_for('salary.salary_history') }}" class="btn btn-secondary btn-lg me-2">Cancel</a>
+          <button type="submit" class="btn btn-success btn-lg">
+            <i class="fas fa-save"></i> Update Salary Record
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+// Parse stored bonus/ot/comm values from the DB (already the calculated amount, not the input %)
+const storedBonus   = parseFloat("{{ record.bonus|float }}")   || 0;
+const storedOT      = parseFloat("{{ record.overtime|float }}") || 0;
+const storedComm    = parseFloat("{{ record.commission|float }}") || 0;
+const monthlySalary = parseFloat("{{ record.worker_monthly_salary }}") || 0;
+const totalDays     = parseInt("{{ record.total_days }}") || 1;
+
+// Determine input type by checking if stored value looks like a percentage of monthly
+// (stored as pct of monthly → value could be > 1% of monthly)
+function detectIsPercent(storedVal) {
+    // If stored value is > 1% of monthly and < 100% of monthly, it was likely a percentage input
+    // But we can't know for sure. Default to amount.
+    return false;
+}
+
+// Pre-fill the form by inferring the stored type
+// Since we only store the final amount, we default to Amount radio
+// Pre-fill moved to DOMContentLoaded below
+
+function formatINR(val) {
+    return '₹' + val.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function recalculate() {
+    const totalDaysVal     = parseInt(document.getElementById('total_days').value)     || 0;
+    const attendedDaysVal   = Math.min(parseInt(document.getElementById('attended_days').value) || 0, totalDaysVal);
+    const bonusPct         = document.querySelector('input[name="bonus_type"]:checked').value === 'pct';
+    const bonusVal         = parseFloat(document.getElementById('bonus_value').value)  || 0;
+    const otPct            = document.querySelector('input[name="ot_type"]:checked').value === 'pct';
+    const otVal            = parseFloat(document.getElementById('ot_value').value)     || 0;
+    const commPct          = document.querySelector('input[name="comm_type"]:checked').value === 'pct';
+    const commVal          = parseFloat(document.getElementById('comm_value').value)   || 0;
+
+    // Cap attended days
+    document.getElementById('attended_days').value = attendedDaysVal;
+
+    const perDay = totalDaysVal > 0 ? monthlySalary / totalDaysVal : 0;
+    const base   = perDay * attendedDaysVal;
+
+    const bonusAmt = bonusPct ? (bonusVal / 100) * monthlySalary : bonusVal;
+    const otAmt    = otPct    ? (otVal    / 100) * monthlySalary : otVal;
+    const commAmt  = commPct  ? (commVal  / 100) * monthlySalary : commVal;
+
+    const total = base + bonusAmt + otAmt + commAmt;
+
+    document.getElementById('per_day_display').textContent = formatINR(perDay);
+    document.getElementById('base_display').textContent  = formatINR(base);
+    document.getElementById('bonus_display').textContent = formatINR(bonusAmt);
+    document.getElementById('ot_display').textContent    = formatINR(otAmt);
+    document.getElementById('comm_display').textContent  = formatINR(commAmt);
+    document.getElementById('total_display').textContent = formatINR(total);
+}
+
+// Attach listeners and pre-fill
+document.addEventListener('DOMContentLoaded', function() {
+    // Pre-fill stored values as Amount type
+    document.getElementById('bonus_amt').checked = true;
+    document.getElementById('ot_amt').checked    = true;
+    document.getElementById('comm_amt').checked  = true;
+    document.getElementById('bonus_value').value = storedBonus.toFixed(2);
+    document.getElementById('ot_value').value    = storedOT.toFixed(2);
+    document.getElementById('comm_value').value  = storedComm.toFixed(2);
+
+    const inputs = ['total_days', 'attended_days', 'bonus_value', 'ot_value', 'comm_value'];
+    inputs.forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('input', recalculate);
+    });
+    document.querySelectorAll('.bonus-type, .ot-type, .comm-type').forEach(function(rbtn) {
+        rbtn.addEventListener('change', recalculate);
+    });
+    recalculate();
+});
+</script>
+
+<style>
+.h3, .h4, .h5 { font-weight: 600; }
+</style>
+{% endblock %}

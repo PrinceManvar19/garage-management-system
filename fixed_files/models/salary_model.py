@@ -5,35 +5,13 @@ from utils.helpers import log_action
 from services.salary_service import calculate_salary
 
 
-VALID_SALARY_STATUSES = {"draft", "finalized", "paid"}
-
-
-def ensure_salary_status_column():
-    """Add salary_status for existing SQLite databases."""
-    columns = {
-        row["name"]
-        for row in get_db().execute("PRAGMA table_info(salary_records)").fetchall()
-    }
-    if "salary_status" not in columns:
-        get_db().execute(
-            "ALTER TABLE salary_records ADD COLUMN salary_status TEXT NOT NULL DEFAULT 'finalized'"
-        )
-        get_db().commit()
-
-
-def _normalize_salary_status(status, default="finalized"):
-    status = (status or default).strip().lower()
-    return status if status in VALID_SALARY_STATUSES else default
-
-
-def save_salary_record(worker_id, total_days, attended_days, bonus_val, bonus_pct, ot_val, ot_pct, comm_val, comm_pct, month=None, year=None, salary_status="finalized"):
+def save_salary_record(worker_id, total_days, attended_days, bonus_val, bonus_pct, ot_val, ot_pct, comm_val, comm_pct, month=None, year=None):
     """
     Save salary calculation to salary_records.
     Prevents duplicate (worker_id, month, year).
     Returns (success, message, record_id).
     """
     worker_id = worker_id.strip().upper()
-    ensure_salary_status_column()
     if not worker_id:
         return False, "Worker ID required", None
 
@@ -49,7 +27,6 @@ def save_salary_record(worker_id, total_days, attended_days, bonus_val, bonus_pc
     now = datetime.datetime.now()
     month = month or f"{now.month:02d}"
     year = year or now.year
-    salary_status = _normalize_salary_status(salary_status)
 
     # Check duplicate
     existing = get_db().execute(
@@ -83,13 +60,11 @@ def save_salary_record(worker_id, total_days, attended_days, bonus_val, bonus_pc
         get_db().execute("""
             INSERT INTO salary_records (
                 worker_id, month, year, total_days, attended_days,
-                per_day_salary, base_salary, bonus, overtime, commission, total_salary,
-                salary_status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                per_day_salary, base_salary, bonus, overtime, commission, total_salary
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             worker_id, month, year, total_days, attended_days,
-            float(per_day), float(base), float(bonus_amt), float(ot_amt), float(comm_amt), float(total),
-            salary_status
+            float(per_day), float(base), float(bonus_amt), float(ot_amt), float(comm_amt), float(total)
         ))
         get_db().commit()
         last_row = get_db().execute("SELECT last_insert_rowid() as id").fetchone()
@@ -104,9 +79,8 @@ def save_salary_record(worker_id, total_days, attended_days, bonus_val, bonus_pc
 
 def get_salary_records(worker_id=None, month=None, year=None):
     """Get salary records (filter optional) with worker details JOINed."""
-    ensure_salary_status_column()
     query = """
-        SELECT sr.*, w.name as worker_name, w.phone as worker_phone, w.monthly_salary as worker_monthly_salary
+        SELECT sr.*, w.name as worker_name, w.phone as worker_phone
         FROM salary_records sr
         JOIN workers w ON sr.worker_id = w.id
     """
@@ -134,7 +108,6 @@ def get_salary_records(worker_id=None, month=None, year=None):
 
 def get_salary_record(record_id):
     """Get single salary record with worker details."""
-    ensure_salary_status_column()
     row = get_db().execute('''
         SELECT sr.*, w.name as worker_name, w.phone as worker_phone, w.monthly_salary as worker_monthly_salary
         FROM salary_records sr
@@ -144,7 +117,7 @@ def get_salary_record(record_id):
     return dict(row) if row else None
 
 
-def update_salary_record(record_id, total_days=None, attended_days=None, bonus_val=None, bonus_pct=None, ot_val=None, ot_pct=None, comm_val=None, comm_pct=None, salary_status=None):
+def update_salary_record(record_id, total_days=None, attended_days=None, bonus_val=None, bonus_pct=None, ot_val=None, ot_pct=None, comm_val=None, comm_pct=None):
     """
     Update salary record fields. Recalculates all salary values.
     Returns (success, message).
@@ -166,7 +139,6 @@ def update_salary_record(record_id, total_days=None, attended_days=None, bonus_v
     ot_pct = ot_pct if ot_pct is not None else False
     comm_val = comm_val if comm_val is not None else 0
     comm_pct = comm_pct if comm_pct is not None else False
-    salary_status = _normalize_salary_status(salary_status, record.get("salary_status") or "finalized")
 
     # Recalculate
     try:
@@ -193,14 +165,12 @@ def update_salary_record(record_id, total_days=None, attended_days=None, bonus_v
             UPDATE salary_records
             SET total_days = ?, attended_days = ?,
                 per_day_salary = ?, base_salary = ?,
-                bonus = ?, overtime = ?, commission = ?, total_salary = ?,
-                salary_status = ?
+                bonus = ?, overtime = ?, commission = ?, total_salary = ?
             WHERE id = ?
         """, (
             total_days, attended_days,
             float(per_day), float(base),
             float(bonus_amt), float(ot_amt), float(comm_amt), float(total),
-            salary_status,
             record_id
         ))
         get_db().commit()
