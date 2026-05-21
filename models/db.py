@@ -418,6 +418,7 @@ def migrate_workers_table(cursor, db):
         WHERE worker_status IS NULL OR TRIM(worker_status) = ''
     """)
 
+
     db.commit()
 
 
