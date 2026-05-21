@@ -1,12 +1,11 @@
 import re
-import sqlite3
 
-from models.db import get_db
+from models.db import get_db, query_dict, query_dict_one, execute_query
 from utils.helpers import log_action, normalize_phone
 
 
 def _generate_customer_id():
-    rows = get_db().execute("SELECT id FROM customers WHERE id LIKE 'CUST%'").fetchall()
+    rows = query_dict("SELECT id FROM customers WHERE id LIKE %s", ("CUST%",))
     highest = 1000
     for row in rows:
         match = re.search(r"(\d+)$", row["id"] or "")
@@ -16,33 +15,33 @@ def _generate_customer_id():
 
 
 def get_customer_by_id(customer_id):
-    row = get_db().execute(
-        "SELECT id, name, phone, vehicle FROM customers WHERE id = ?",
+    row = query_dict_one(
+        "SELECT id, name, phone, vehicle FROM customers WHERE id = %s",
         (customer_id,),
-    ).fetchone()
+    )
     return dict(row) if row else None
 
 
 def find_customer(name, phone, vehicle):
-    row = get_db().execute(
+    row = query_dict_one(
         """
         SELECT id, name, phone, vehicle
         FROM customers
-        WHERE LOWER(name) = LOWER(?)
-          AND phone = ?
-          AND LOWER(vehicle) = LOWER(?)
+        WHERE LOWER(name) = LOWER(%s)
+          AND phone = %s
+          AND LOWER(vehicle) = LOWER(%s)
         """,
         (name, phone, vehicle),
-    ).fetchone()
+    )
     return dict(row) if row else None
 
 
 def get_customer_by_phone(phone):
     normalized_phone = normalize_phone(phone)
-    row = get_db().execute(
-        "SELECT id, name, phone, vehicle FROM customers WHERE phone = ?",
+    row = query_dict_one(
+        "SELECT id, name, phone, vehicle FROM customers WHERE phone = %s",
         (normalized_phone,),
-    ).fetchone()
+    )
     return dict(row) if row else None
 
 
@@ -50,17 +49,16 @@ def get_customer_by_phone_or_id(identifier):
     normalized_identifier = (identifier or "").strip()
     normalized_phone = normalize_phone(normalized_identifier)
     normalized_customer_id = normalized_identifier.upper()
-
     try:
-        row = get_db().execute(
+        row = query_dict_one(
             """
             SELECT id, name, phone, vehicle
             FROM customers
-            WHERE phone = ? OR id = ?
+            WHERE phone = %s OR id = %s
             LIMIT 1
             """,
             (normalized_phone, normalized_customer_id),
-        ).fetchone()
+        )
         return dict(row) if row else None
     except Exception as error:
         log_action("LOGIN DB ERROR", str(error))
@@ -68,25 +66,22 @@ def get_customer_by_phone_or_id(identifier):
 
 
 def _get_vehicles_for_customer_id(customer_id):
-    rows = get_db().execute(
+    rows = query_dict(
         """
         SELECT plate_number, brand, model
         FROM vehicles
-        WHERE customer_id = ?
+        WHERE customer_id = %s
         ORDER BY plate_number ASC
         """,
         (customer_id,),
-    ).fetchall()
+    )
     vehicles = [dict(row) for row in rows]
-
     if vehicles:
         return vehicles
-
     customer = get_customer_by_id(customer_id)
     legacy_vehicle = (customer or {}).get("vehicle", "").strip().upper()
     if not legacy_vehicle:
         return []
-
     return [{"plate_number": legacy_vehicle, "brand": "", "model": ""}]
 
 
@@ -94,14 +89,12 @@ def _set_primary_vehicle_if_missing(customer_id, plate_number):
     customer = get_customer_by_id(customer_id)
     if not customer:
         return
-
     current_vehicle = (customer.get("vehicle") or "").strip().upper()
     normalized_plate = (plate_number or "").strip().upper()
     if current_vehicle or not normalized_plate:
         return
-
-    get_db().execute(
-        "UPDATE customers SET vehicle = ? WHERE id = ?",
+    execute_query(
+        "UPDATE customers SET vehicle = %s WHERE id = %s",
         (normalized_plate, customer_id),
     )
 
@@ -116,51 +109,39 @@ def _upsert_vehicle_record(db, customer_id, plate_number, brand="", model=""):
     if not re.fullmatch(r"^[A-Z0-9\s-]{4,15}$", normalized_plate):
         raise ValueError("Invalid vehicle number format.")
 
-    existing_vehicle = db.execute(
-        """
-        SELECT plate_number, customer_id, brand, model
-        FROM vehicles
-        WHERE plate_number = ?
-        """,
-        (normalized_plate,),
-    ).fetchone()
-
-    if existing_vehicle:
-        if existing_vehicle["customer_id"] != customer_id:
-            raise ValueError("Vehicle number plate is already linked to another customer.")
-
-        next_brand = normalized_brand or (existing_vehicle["brand"] or "")
-        next_model = normalized_model or (existing_vehicle["model"] or "")
-        db.execute(
+    cursor = db.cursor()
+    from psycopg2.extras import RealDictCursor
+    cursor = db.cursor(cursor_factory=RealDictCursor)
+    try:
+        cursor.execute(
             """
-            UPDATE vehicles
-            SET brand = ?, model = ?
-            WHERE plate_number = ?
+            SELECT plate_number, customer_id, brand, model
+            FROM vehicles WHERE plate_number = %s
             """,
-            (next_brand, next_model, normalized_plate),
+            (normalized_plate,),
+        )
+        existing_vehicle = cursor.fetchone()
+
+        if existing_vehicle:
+            if existing_vehicle["customer_id"] != customer_id:
+                raise ValueError("Vehicle number plate is already linked to another customer.")
+            next_brand = normalized_brand or (existing_vehicle["brand"] or "")
+            next_model = normalized_model or (existing_vehicle["model"] or "")
+            cursor.execute(
+                "UPDATE vehicles SET brand = %s, model = %s WHERE plate_number = %s",
+                (next_brand, next_model, normalized_plate),
+            )
+            _set_primary_vehicle_if_missing(customer_id, normalized_plate)
+            return {"plate_number": normalized_plate, "brand": next_brand, "model": next_model, "created": False}
+
+        cursor.execute(
+            "INSERT INTO vehicles (plate_number, customer_id, brand, model) VALUES (%s, %s, %s, %s)",
+            (normalized_plate, customer_id, normalized_brand, normalized_model),
         )
         _set_primary_vehicle_if_missing(customer_id, normalized_plate)
-        return {
-            "plate_number": normalized_plate,
-            "brand": next_brand,
-            "model": next_model,
-            "created": False,
-        }
-
-    db.execute(
-        """
-        INSERT INTO vehicles (plate_number, customer_id, brand, model)
-        VALUES (?, ?, ?, ?)
-        """,
-        (normalized_plate, customer_id, normalized_brand, normalized_model),
-    )
-    _set_primary_vehicle_if_missing(customer_id, normalized_plate)
-    return {
-        "plate_number": normalized_plate,
-        "brand": normalized_brand,
-        "model": normalized_model,
-        "created": True,
-    }
+        return {"plate_number": normalized_plate, "brand": normalized_brand, "model": normalized_model, "created": True}
+    finally:
+        cursor.close()
 
 
 def create_customer(name, phone, vehicle, brand="", model=""):
@@ -189,23 +170,21 @@ def create_customer(name, phone, vehicle, brand="", model=""):
         "vehicle": normalized_vehicle,
     }
 
+    db = get_db()
     try:
-        get_db().execute(
-            """
-            INSERT INTO customers (id, name, phone, vehicle)
-            VALUES (?, ?, ?, ?)
-            """,
+        cursor = db.cursor()
+        cursor.execute(
+            "INSERT INTO customers (id, name, phone, vehicle) VALUES (%s, %s, %s, %s)",
             (customer["id"], customer["name"], customer["phone"], customer["vehicle"]),
         )
-        _upsert_vehicle_record(get_db(), customer["id"], normalized_vehicle, brand, model)
-        get_db().commit()
-    except sqlite3.IntegrityError:
-        get_db().rollback()
-        log_action("REGISTRATION DB ERROR", "duplicate phone")
-        return False, "Phone already registered", None
+        cursor.close()
+        _upsert_vehicle_record(db, customer["id"], normalized_vehicle, brand, model)
+        db.commit()
     except Exception as error:
-        get_db().rollback()
+        db.rollback()
         log_action("REGISTRATION DB ERROR", str(error))
+        if "unique" in str(error).lower() or "duplicate" in str(error).lower():
+            return False, "Phone already registered", None
         return False, "Registration failed. Please try again.", None
 
     return True, "", customer
@@ -217,10 +196,11 @@ def ensure_customer(phone, name, vehicle, brand="", model=""):
     normalized_vehicle = (vehicle or "").strip().upper()
 
     existing = get_customer_by_phone(normalized_phone)
+    db = get_db()
     if existing:
         if normalized_vehicle:
-            _upsert_vehicle_record(get_db(), existing["id"], normalized_vehicle, brand, model)
-            get_db().commit()
+            _upsert_vehicle_record(db, existing["id"], normalized_vehicle, brand, model)
+            db.commit()
         return get_customer_by_id(existing["id"]) or existing
 
     customer = {
@@ -229,16 +209,15 @@ def ensure_customer(phone, name, vehicle, brand="", model=""):
         "phone": normalized_phone,
         "vehicle": normalized_vehicle,
     }
-    get_db().execute(
-        """
-        INSERT INTO customers (id, name, phone, vehicle)
-        VALUES (?, ?, ?, ?)
-        """,
+    cursor = db.cursor()
+    cursor.execute(
+        "INSERT INTO customers (id, name, phone, vehicle) VALUES (%s, %s, %s, %s)",
         (customer["id"], customer["name"], customer["phone"], customer["vehicle"]),
     )
+    cursor.close()
     if normalized_vehicle:
-        _upsert_vehicle_record(get_db(), customer["id"], normalized_vehicle, brand, model)
-    get_db().commit()
+        _upsert_vehicle_record(db, customer["id"], normalized_vehicle, brand, model)
+    db.commit()
     return customer
 
 
@@ -246,34 +225,31 @@ def search_customers(query, limit=5):
     normalized_query = (query or "").strip()
     if not normalized_query:
         return []
-
     search_term = f"%{normalized_query.upper()}%"
     normalized_phone = normalize_phone(normalized_query)
     phone_search_term = f"%{normalized_phone}%" if normalized_phone else None
-    rows = get_db().execute(
+    rows = query_dict(
         """
         SELECT DISTINCT c.id, c.name, c.phone, c.vehicle
         FROM customers c
         LEFT JOIN vehicles v ON v.customer_id = c.id
-        WHERE UPPER(c.id) LIKE ?
-           OR UPPER(c.name) LIKE ?
-           OR UPPER(c.vehicle) LIKE ?
-           OR UPPER(COALESCE(v.plate_number, '')) LIKE ?
-           OR (? IS NOT NULL AND c.phone LIKE ?)
+        WHERE UPPER(c.id) LIKE %s
+           OR UPPER(c.name) LIKE %s
+           OR UPPER(c.vehicle) LIKE %s
+           OR UPPER(COALESCE(v.plate_number, '')) LIKE %s
+           OR (%s IS NOT NULL AND c.phone LIKE %s)
         ORDER BY c.id ASC
-        LIMIT ?
+        LIMIT %s
         """,
         (search_term, search_term, search_term, search_term, phone_search_term, phone_search_term, limit),
-    ).fetchall()
+    )
     return [dict(row) for row in rows]
 
 
 def get_vehicles_by_customer(identifier):
-    """Get customer vehicles by phone or customer_id."""
     customer = get_customer_by_phone_or_id(identifier)
     if not customer:
         return []
-
     return _get_vehicles_for_customer_id(customer["id"])
 
 
@@ -281,11 +257,7 @@ def get_customer_with_vehicles(identifier):
     customer = get_customer_by_phone_or_id(identifier)
     if not customer:
         return None
-
-    return {
-        "customer": customer,
-        "vehicles": _get_vehicles_for_customer_id(customer["id"]),
-    }
+    return {"customer": customer, "vehicles": _get_vehicles_for_customer_id(customer["id"])}
 
 
 def add_vehicle_to_customer(customer_id, plate_number, brand="", model=""):
@@ -293,12 +265,12 @@ def add_vehicle_to_customer(customer_id, plate_number, brand="", model=""):
     customer = get_customer_by_id(normalized_customer_id)
     if not customer:
         raise ValueError("Customer not found.")
-
-    vehicle = _upsert_vehicle_record(get_db(), normalized_customer_id, plate_number, brand, model)
-    get_db().commit()
+    db = get_db()
+    vehicle = _upsert_vehicle_record(db, normalized_customer_id, plate_number, brand, model)
+    db.commit()
     return vehicle
 
 
 def get_customer_map():
-    rows = get_db().execute("SELECT id, name, phone, vehicle FROM customers").fetchall()
+    rows = query_dict("SELECT id, name, phone, vehicle FROM customers")
     return {row["id"]: dict(row) for row in rows}

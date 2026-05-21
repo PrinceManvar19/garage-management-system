@@ -193,6 +193,9 @@
         <a href="/admin/bookings" class="admin-sidebar-link {% if request.path.startswith('/admin/bookings') %}active{% endif %}">
           <i class="fas fa-clipboard-list"></i> Booking Requests
         </a>
+        <a href="/admin/service-reminders" class="admin-sidebar-link {% if request.path.startswith('/admin/service-reminders') %}active{% endif %}">
+          <i class="fas fa-bell"></i> Service Reminder
+        </a>
         <a href="/admin/walkin" class="admin-sidebar-link {% if request.path.startswith('/admin/walkin') %}active{% endif %}">
           <i class="fas fa-motorcycle"></i> Walk-in Entry
         </a>
@@ -204,6 +207,9 @@
         </a>
         <a href="/admin/salary/history" class="admin-sidebar-link {% if request.path.startswith('/admin/salary/history') %}active{% endif %}">
           <i class="fas fa-history"></i> Salary History
+        </a>
+        <a href="/admin/salary/advances" class="admin-sidebar-link {% if request.path.startswith('/admin/salary/advances') %}active{% endif %}">
+          <i class="fas fa-hand-holding-dollar"></i> Worker Advances
         </a>
         <a href="/admin/attendance" class="admin-sidebar-link {% if request.path.startswith('/admin/attendance') %}active{% endif %}">
           <i class="fas fa-clipboard-check"></i> Attendance

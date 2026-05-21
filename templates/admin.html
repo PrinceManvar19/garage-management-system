@@ -34,6 +34,11 @@
       <div class="admin-stat-num" id="today-completed-count">{{ today_stats.completed or 0 }}</div>
       <div class="admin-stat-label">Completed</div>
     </div>
+    <a href="{{ url_for('admin.service_reminders') }}" class="admin-stat-card today-card" style="text-decoration:none;">
+      <i class="fas fa-bell" style="color:#dc2626;"></i>
+      <div class="admin-stat-num">{{ service_due_count or 0 }}</div>
+      <div class="admin-stat-label">Vehicles Due for Service</div>
+    </a>
   </div>
 
   <div class="dash-card">

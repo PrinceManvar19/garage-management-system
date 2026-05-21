@@ -5,6 +5,7 @@ from io import BytesIO, StringIO
 from urllib.parse import quote
 
 from flask import Blueprint, jsonify, Response, flash, redirect, render_template, request, session, url_for
+from psycopg2.extras import RealDictCursor
 
 from models.db import get_db
 from models.booking_model import update_message_flags
@@ -23,6 +24,13 @@ from services.booking_service import (
     get_booking_stats,
     get_today_bookings,
     get_today_stats,
+)
+from services.service_reminder_service import (
+    build_whatsapp_url_for_reminder,
+    due_reminder_count,
+    list_due_reminders,
+    mark_reminder_sent,
+    snooze_reminder,
 )
 from services.slot_service import get_slots_for_admin, set_slot_total
 from utils.constants import STATUS_APPROVED, STATUS_CHECKED_IN, STATUS_COMPLETED, STATUS_PENDING, STATUS_REJECTED
@@ -80,6 +88,7 @@ def admin():
     # Today control panel data
     today_bookings = get_today_bookings(today)
     today_stats = get_today_stats(today)
+    service_due_count = due_reminder_count()
     
     # Garage vehicles (checked_in)
     vehicles_in_garage = [b for b in bookings if b.get("status") == STATUS_CHECKED_IN]
@@ -119,7 +128,8 @@ def admin():
                          last_7_days_data=last_7_days_data,
                          today_bookings=today_bookings,
                          late_arrival_bookings=late_arrival_bookings,
-                         today_stats=today_stats)
+                         today_stats=today_stats,
+                         service_due_count=service_due_count)
 
 
 @admin_bp.route("/checkin")
@@ -207,6 +217,60 @@ def admin_bookings():
         filters=filters,
         today=get_today_date_string(),
     )
+
+
+@admin_bp.route("/service-reminders")
+def service_reminders():
+    admin_guard = _require_admin()
+    if admin_guard is not None:
+        return admin_guard
+
+    return render_template(
+        "service_reminders.html",
+        reminders=list_due_reminders(),
+    )
+
+
+@admin_bp.route("/service-reminders/<booking_id>/whatsapp")
+def service_reminder_whatsapp(booking_id):
+    admin_guard = _require_admin()
+    if admin_guard is not None:
+        return admin_guard
+
+    whatsapp_url = build_whatsapp_url_for_reminder(booking_id)
+    if not whatsapp_url:
+        flash("WhatsApp reminder could not be opened for this booking.", "error")
+        return redirect(url_for("admin.service_reminders"))
+
+    mark_reminder_sent(booking_id)
+    return redirect(whatsapp_url)
+
+
+@admin_bp.route("/service-reminders/<booking_id>/mark-sent", methods=["POST"])
+def service_reminder_mark_sent(booking_id):
+    admin_guard = _require_admin()
+    if admin_guard is not None:
+        return admin_guard
+
+    if mark_reminder_sent(booking_id):
+        flash("Reminder marked as sent.", "success")
+    else:
+        flash("Reminder could not be updated.", "error")
+    return redirect(url_for("admin.service_reminders"))
+
+
+@admin_bp.route("/service-reminders/<booking_id>/snooze", methods=["POST"])
+def service_reminder_snooze(booking_id):
+    admin_guard = _require_admin()
+    if admin_guard is not None:
+        return admin_guard
+
+    success, snooze_until = snooze_reminder(booking_id, days=7)
+    if success:
+        flash(f"Reminder snoozed until {snooze_until}.", "success")
+    else:
+        flash("Reminder could not be snoozed.", "error")
+    return redirect(url_for("admin.service_reminders"))
 
 
 @admin_bp.route("/walkin", methods=["GET", "POST"])
@@ -606,12 +670,14 @@ def export_preview():
     if data_type == "bookings":
         count = _count_booking_exports(from_date, to_date, status)
     elif data_type == "customers":
-        row = get_db().execute("SELECT COUNT(*) AS total FROM customers").fetchone()
+        from models.db import query_dict_one
+        row = query_dict_one("SELECT COUNT(*) AS total FROM customers")
         count = row["total"] if row else 0
     elif data_type == "garage":
         count = _count_booking_exports(from_date, to_date, garage_only=True)
     elif data_type == "all":
-        customer_row = get_db().execute("SELECT COUNT(*) AS total FROM customers").fetchone()
+        from models.db import query_dict_one
+        customer_row = query_dict_one("SELECT COUNT(*) AS total FROM customers")
         count = _count_booking_exports(from_date, to_date, status)
         count += customer_row["total"] if customer_row else 0
     else:
@@ -737,17 +803,17 @@ def _booking_filter_clause(from_date="", to_date="", status="", garage_only=Fals
     params = []
 
     if garage_only:
-        clauses.append("status = ?")
+        clauses.append("status = %s")
         params.append(STATUS_CHECKED_IN)
     elif status in EXPORT_STATUSES:
-        clauses.append("status = ?")
+        clauses.append("status = %s")
         params.append(status)
 
     if from_date:
-        clauses.append("date >= ?")
+        clauses.append("date >= %s")
         params.append(from_date)
     if to_date:
-        clauses.append("date <= ?")
+        clauses.append("date <= %s")
         params.append(to_date)
 
     where_sql = "WHERE " + " AND ".join(clauses) if clauses else ""
@@ -756,22 +822,36 @@ def _booking_filter_clause(from_date="", to_date="", status="", garage_only=Fals
 
 def _fetch_booking_export_rows(from_date="", to_date="", status="", garage_only=False):
     where_sql, params = _booking_filter_clause(from_date, to_date, status, garage_only)
-    return get_db().execute(
-        f"""
-        SELECT booking_id, customer_id, name, phone, vehicle, brand_model, service,
-               date, status, created_at, checked_in_at, completed_at
-        FROM bookings
-        {where_sql}
-        ORDER BY date DESC, COALESCE(created_at, checked_in_at, '') DESC
-        """,
-        params,
-    ).fetchall()
+    db = get_db()
+    cursor = db.cursor(cursor_factory=RealDictCursor)
+
+    try:
+        cursor.execute(
+            f"""
+            SELECT booking_id, customer_id, name, phone, vehicle, brand_model, service,
+                   date, status, created_at, checked_in_at, completed_at
+            FROM bookings
+            {where_sql}
+            ORDER BY date DESC, COALESCE(created_at, checked_in_at, '') DESC
+            """,
+            params,
+        )
+        return cursor.fetchall()
+
+    finally:
+        cursor.close()
 
 
 def _fetch_customer_export_rows():
-    return get_db().execute(
-        "SELECT id, name, phone, vehicle FROM customers ORDER BY id ASC"
-    ).fetchall()
+    db = get_db()
+    cursor = db.cursor(cursor_factory=RealDictCursor)
+
+    try:
+        cursor.execute("SELECT id, name, phone, vehicle FROM customers ORDER BY id ASC")
+        return cursor.fetchall()
+
+    finally:
+        cursor.close()
 
 
 def _booking_csv_rows(rows):
@@ -832,7 +912,8 @@ def _csv_string(headers, rows):
 
 def _count_booking_exports(from_date="", to_date="", status="", garage_only=False):
     where_sql, params = _booking_filter_clause(from_date, to_date, status, garage_only)
-    row = get_db().execute(f"SELECT COUNT(*) AS total FROM bookings {where_sql}", params).fetchone()
+    from models.db import query_dict_one
+    row = query_dict_one(f"SELECT COUNT(*) AS total FROM bookings {where_sql}", params)
     return row["total"] if row else 0
 
 

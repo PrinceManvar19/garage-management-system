@@ -25,6 +25,7 @@ from reportlab.platypus import (
 
 from models.db import get_db
 from models.worker_model import get_worker
+from psycopg2.extras import RealDictCursor
 
 
 COMPANY_NAME = "SHREEJI AUTO SERVICE"
@@ -275,26 +276,22 @@ def _add_salary_row(rows, label, value, styles, amount=True, always=False, bold=
     rows.append([_paragraph(label, label_style), _paragraph(display_value, amount_style)])
 
 
-def _salary_rows(record, worker, styles):
-    total_days = _decimal(record.get("total_days"))
+def _salary_sections(record, worker, styles):
     attended_days = _decimal(record.get("attended_days"))
-    absent_days = total_days - attended_days
-    absent_deduction = _decimal(record.get("per_day_salary")) * absent_days
-
-    # DEBUG: quick snapshot of possible mappings (do not remove)
-    # Helps diagnose cases where FINAL PAYABLE shows ₹0.00
-    print("PDF FINAL DEBUG:", {
-        "id": record.get("id"),
-        "total_salary": record.get("total_salary"),
-        "net_salary": record.get("net_salary"),
-        "final_payable_salary": record.get("final_payable_salary"),
-        "payable_salary": record.get("payable_salary"),
-        "paid_amount": record.get("paid_amount"),
-        "payment_amount": record.get("payment_amount"),
-    })
-
-    # Prefer correct computed fields; fall back to total_salary.
-    final_payable = _record_value(
+    base_salary = _decimal(record.get("base_salary"))
+    bonus = _decimal(record.get("bonus"))
+    overtime = _decimal(record.get("overtime"))
+    commission = _decimal(record.get("commission"))
+    monthly_advance = _decimal(_record_value(record, "pocket_money_deduction", default=0))
+    monthly_advance_count = int(_decimal(_record_value(record, "monthly_advance_entry_count", default=0)))
+    debt_recovery = _decimal(_record_value(record, "debt_recovery_deduction", default=0))
+    remaining_debt = _decimal(_record_value(record, "remaining_debt_balance", default=0))
+    previous_debt = _decimal(_record_value(record, "previous_pending_debt", default=remaining_debt + debt_recovery))
+    if previous_debt == 0 and (remaining_debt > 0 or debt_recovery > 0):
+        previous_debt = remaining_debt + debt_recovery
+    total_earnings = _decimal(_record_value(record, "gross_salary", default=0)) or (base_salary + bonus + overtime + commission)
+    total_deductions = monthly_advance + debt_recovery
+    final_payable = _decimal(_record_value(
         record,
         "net_payable",
         "final_payable_salary",
@@ -303,39 +300,34 @@ def _salary_rows(record, worker, styles):
         "payable_salary",
         "net_salary",
         default=record.get("total_salary"),
-    )
+    ))
 
+    earnings = [[_paragraph("EARNINGS", styles["CellBold"]), _paragraph("AMOUNT", styles["CellBoldRight"])]]
+    _add_salary_row(earnings, "Total Basic Salary", worker.get("monthly_salary"), styles, always=True)
+    _add_salary_row(earnings, "Per Day Salary", record.get("per_day_salary"), styles, always=True)
+    _add_salary_row(earnings, f"Present Days ({attended_days:.1f})", base_salary, styles, always=True)
+    _add_salary_row(earnings, "Bonus", bonus, styles)
+    _add_salary_row(earnings, "Overtime", overtime, styles)
+    _add_salary_row(earnings, "Commission", commission, styles)
 
-    rows = [[_paragraph("DETAIL", styles["CellBold"]), _paragraph("AMOUNT", styles["CellBoldRight"])]]
-    _add_salary_row(rows, "TOTAL BASIC AMOUNT", worker.get("monthly_salary"), styles)
-    _add_salary_row(rows, "PER DAY SALARY", record.get("per_day_salary"), styles)
-    if absent_days > 0:
-        _add_salary_row(rows, f"ABSENT DAY ({absent_days:.1f} days)", f"({_money(absent_deduction)})", styles, amount=False)
-    _add_salary_row(rows, f"PRESENT DAY ({attended_days:.1f} days)", record.get("base_salary"), styles)
-    _add_salary_row(rows, "BONUS", record.get("bonus"), styles)
-    _add_salary_row(rows, "OVERTIME", record.get("overtime"), styles)
-    _add_salary_row(rows, "COMMISSION", record.get("commission"), styles)
+    deductions = [[_paragraph("DEDUCTIONS", styles["CellBold"]), _paragraph("AMOUNT", styles["CellBoldRight"])]]
+    _add_salary_row(deductions, f"Monthly Advance ({monthly_advance_count} entries)", monthly_advance, styles, always=True)
+    _add_salary_row(deductions, "Debt Recovery", debt_recovery, styles, always=True)
 
-    advance = _record_value(record, "advance_salary", "advance_amount", "advance")
-    advance_date = _record_value(record, "advance_date", "advance_salary_date")
-    advance_label = "ADVANCE SALARY"
-    if advance_date:
-        advance_label += f" ({_date_label(advance_date)})"
-    _add_salary_row(rows, advance_label, advance, styles)
+    debt = [[_paragraph("LONG-TERM DEBT STATUS", styles["CellBold"]), _paragraph("AMOUNT", styles["CellBoldRight"])]]
+    _add_salary_row(debt, "Previous Pending Debt", previous_debt, styles, always=True)
+    _add_salary_row(debt, "Recovered This Month", debt_recovery, styles, always=True)
+    _add_salary_row(debt, "Remaining Debt Balance", remaining_debt, styles, always=True, bold=True)
 
-    advance_note = _record_value(record, "advance_note", "advance_salary_note")
-    _add_salary_row(rows, "ADVANCE NOTE", advance_note, styles, amount=False)
-    _add_salary_row(rows, "PF DEDUCTION", _record_value(record, "pf_deduction", "pf"), styles)
-    _add_salary_row(rows, "ESI DEDUCTION", _record_value(record, "esi_deduction", "esi"), styles)
-    _add_salary_row(rows, "TDS", _record_value(record, "tds", "tds_deduction"), styles)
-    _add_salary_row(rows, "TOTAL SALARY", record.get("total_salary"), styles, always=True, bold=True)
-    rows.append(
-        [
-            _paragraph("FINAL PAYABLE SALARY", styles["FinalCell"]),
-            _paragraph(_money(final_payable), styles["FinalCellRight"]),
-        ]
-    )
-    return rows
+    final = [[_paragraph("FINAL SALARY", styles["CellBold"]), _paragraph("AMOUNT", styles["CellBoldRight"])]]
+    _add_salary_row(final, "Total Earnings", total_earnings, styles, always=True)
+    _add_salary_row(final, "Total Deductions", total_deductions, styles, always=True)
+    final.append([
+        _paragraph("FINAL PAYABLE SALARY", styles["FinalCell"]),
+        _paragraph(_money(final_payable), styles["FinalCellRight"]),
+    ])
+
+    return earnings, deductions, debt, final
 
 
 def _table(data, col_widths, commands):
@@ -349,7 +341,14 @@ def generate_salary_pdf(record_id):
     buffer = BytesIO()
 
     db = get_db()
-    record = db.execute("SELECT * FROM salary_records WHERE id = ?", (record_id,)).fetchone()
+    cursor = db.cursor(cursor_factory=RealDictCursor)
+
+    try:
+        cursor.execute("SELECT * FROM salary_records WHERE id = %s", (record_id,))
+        record = cursor.fetchone()
+
+    finally:
+        cursor.close()
 
 
     if not record:
@@ -433,33 +432,39 @@ def generate_salary_pdf(record_id):
     )
     story.extend([info, Spacer(1, 8), _paragraph("MONTHLY SALARY SLIP", styles["SlipTitle"])])
 
-    salary_data = _salary_rows(record, worker, styles)
-    salary_table = _table(
-        salary_data,
-        [page_width * 0.58, page_width * 0.42],
-        [
-            ("GRID", (0, 0), (-1, -1), 0.7, colors.HexColor("#6B7280")),
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#D9E2EC")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#111827")),
-            ("FONTNAME", (0, 0), (-1, 0), FONT_BOLD),
-            ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING", (0, 0), (-1, -1), 6),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-            ("LEFTPADDING", (0, 0), (-1, -1), 9),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 9),
-            ("BACKGROUND", (0, -2), (-1, -2), colors.HexColor("#DCFCE7")),
-            ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#22C55E")),
-            ("TEXTCOLOR", (0, -1), (-1, -1), colors.white),
-            ("FONTSIZE", (0, -1), (-1, -1), 11),
-        ],
-    )
-    story.extend([salary_table, Spacer(1, 10)])
+    table_style = [
+        ("GRID", (0, 0), (-1, -1), 0.7, colors.HexColor("#6B7280")),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#D9E2EC")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#111827")),
+        ("FONTNAME", (0, 0), (-1, 0), FONT_BOLD),
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 9),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 9),
+    ]
+    final_table_style = table_style + [
+        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#22C55E")),
+        ("TEXTCOLOR", (0, -1), (-1, -1), colors.white),
+        ("FONTSIZE", (0, -1), (-1, -1), 11),
+    ]
+    earnings, deductions, debt, final_salary = _salary_sections(record, worker, styles)
+    for section in (earnings, deductions, debt):
+        story.extend([
+            _table(section, [page_width * 0.58, page_width * 0.42], table_style),
+            Spacer(1, 8),
+        ])
+    story.extend([
+        _table(final_salary, [page_width * 0.58, page_width * 0.42], final_table_style),
+        Spacer(1, 10),
+    ])
 
     payment_method = _record_value(record, "payment_method", "pay_method", default="Pending")
     payment_reference = _record_value(record, "payment_reference", "payment_ref", "transaction_id", default="—")
     final_payable = _record_value(
         record,
+        "net_payable",
         "final_payable_salary",
         "payable_salary",
         "net_salary",

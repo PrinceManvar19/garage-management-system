@@ -65,7 +65,7 @@
         <div class="info-row">
           <span>Net Payable</span>
           <strong style="color:var(--accent);">
-            &#8377;{{ "%.2f"|format(record.total_salary|float) }}
+            &#8377;{{ "%.2f"|format((record.final_payable_salary or record.total_salary)|float) }}
           </strong>
         </div>
       </div>

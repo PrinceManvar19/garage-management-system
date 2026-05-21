@@ -1,26 +1,25 @@
-from models.db import get_db
+from models.db import query_dict, query_dict_one, execute_query
 
 
 def get_slots_map():
-    rows = get_db().execute("SELECT date, total FROM slots ORDER BY date DESC").fetchall()
+    rows = query_dict("SELECT date, total FROM slots ORDER BY date DESC")
     return {row["date"]: {"total": row["total"]} for row in rows}
 
 
 def get_slot(date):
-    row = get_db().execute(
-        "SELECT date, total FROM slots WHERE date = ?",
+    row = query_dict_one(
+        "SELECT date, total FROM slots WHERE date = %s",
         (date,),
-    ).fetchone()
+    )
     return dict(row) if row else None
 
 
 def upsert_slot(date, total):
-    get_db().execute(
+    execute_query(
         """
         INSERT INTO slots (date, total)
-        VALUES (?, ?)
-        ON CONFLICT(date) DO UPDATE SET
-            total = excluded.total
+        VALUES (%s, %s)
+        ON CONFLICT (date) DO UPDATE SET total = EXCLUDED.total
         """,
         (date, total),
     )

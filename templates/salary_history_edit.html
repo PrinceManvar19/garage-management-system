@@ -88,6 +88,11 @@
 
   .pill-note { background:#fff3f3; border:1px solid #fecaca; color:#b91c1c; padding:0.65rem 0.75rem; border-radius:12px; font-weight:900; }
   .readonly-overlay { opacity:0.75; pointer-events:none; }
+  .advance-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0.85rem; }
+  .advance-box { border:1px solid #f0f0f5; border-radius:12px; padding:0.9rem; background:#fff; }
+  .advance-box .amount { font-family:var(--font-head); font-size:1.25rem; font-weight:900; color:var(--accent); margin-top:0.2rem; }
+  .history-list { margin-top:0.75rem; border-top:1px solid #f0f0f5; padding-top:0.6rem; font-size:0.84rem; color:var(--text-muted); }
+  .history-list div { display:flex; justify-content:space-between; gap:0.8rem; padding:0.28rem 0; border-bottom:1px dashed #eeeeF2; }
 
   .btn-row { display:flex; gap:0.75rem; flex-wrap:wrap; margin-top:1.1rem; }
   .btn {
@@ -109,6 +114,10 @@
 
 {% set current_status = (record.salary_status or 'finalized') | string %}
 {% set status_lower = current_status | lower %}
+{% set advance_count = (record.monthly_advance_entry_count or (monthly_advance_entries|length if monthly_advance_entries is defined else 0))|int %}
+{% set recovered_debt = (record.debt_recovery_deduction or 0)|float %}
+{% set previous_debt = (((record.remaining_debt_balance or 0)|float + recovered_debt) if ((record.previous_pending_debt or 0)|float == 0 and (((record.remaining_debt_balance or 0)|float + recovered_debt) > 0)) else (record.previous_pending_debt or 0))|float %}
+{% set remaining_debt = (record.remaining_debt_balance if record.remaining_debt_balance is not none else (previous_debt - recovered_debt))|float %}
 
 <div class="edit-page">
   <div class="edit-page-header">
@@ -116,7 +125,7 @@
       <div class="edit-icon"><i class="fas fa-edit"></i></div>
       <div>
         <h1>Edit Salary Record</h1>
-        <p>Live earnings and payable salary</p>
+        <p>Monthly advances, pending advance recovery, and final payable salary</p>
       </div>
     </div>
 
@@ -171,8 +180,42 @@
 
         <div class="card" style="margin-bottom:1.25rem;">
           <div class="card-header">
+            <h3><i class="fas fa-hand-holding-dollar"></i> Advance Management</h3>
+            <div class="muted">Saved with this salary slip</div>
+          </div>
+          <div class="card-body">
+            <div class="advance-grid">
+              <div class="advance-box">
+                <div class="label">Monthly Advances</div>
+                <div class="amount" id="uiMonthlyAdvanceBox">&#8377;{{ "%.2f"|format((record.pocket_money_deduction or 0)|float) }}</div>
+                <div class="muted">{{ advance_count }} {{ 'entry' if advance_count == 1 else 'entries' }} auto deducted</div>
+                <div class="history-list">
+                  {% for row in monthly_advance_entries or [] %}
+                    <div><span>{{ row.entry_date }}{% if row.note %} - {{ row.note }}{% endif %}</span><strong>&#8377;{{ "%.2f"|format(row.amount|float) }}</strong></div>
+                  {% else %}
+                    <div><span>No monthly advance entries saved for this period.</span><strong></strong></div>
+                  {% endfor %}
+                </div>
+              </div>
+              <div class="advance-box">
+                <div class="label">Pending Long-Term Debt</div>
+                <div class="amount" id="uiPreviousDebtBox">&#8377;{{ "%.2f"|format(previous_debt) }}</div>
+                <div class="muted">Debt before this salary recovery</div>
+              </div>
+              <div class="advance-box">
+                <label class="label" for="debt_recovery_amount">Recover Pending Advance</label>
+                <input class="input" type="number" step="0.01" id="debt_recovery_amount" name="debt_recovery_amount" min="0" max="{{ "%.2f"|format(previous_debt) }}" value="{{ "%.2f"|format(recovered_debt) }}">
+                <div class="muted" style="margin-top:0.55rem;">Remaining Debt</div>
+                <div class="amount" id="uiRemainingDebtBox">&#8377;{{ "%.2f"|format(remaining_debt) }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:1.25rem;">
+          <div class="card-header">
             <h3><i class="fas fa-chart-bar"></i> Earnings &amp; Allowances</h3>
-            <div class="muted">Bonus / Overtime / Commission</div>
+            <div class="muted">Optional secondary additions</div>
           </div>
           <div class="card-body">
             <div class="grid-3">
@@ -215,9 +258,6 @@
           </div>
         </div>
 
-        <!-- Notes: Advance + Deductions are not currently persisted in this DB schema beyond net_salary/total_salary,
-             so the rebuilt page focuses on stable editing and payable calculation aligned to `total_salary` / `net_salary`. -->
-
         <div class="btn-row">
           <button type="button" class="btn" id="saveDraftBtn" data-action="draft" {% if status_lower == 'paid' %}disabled{% endif %}>
             <i class="fas fa-file"></i> Save Draft
@@ -254,6 +294,14 @@
               <div class="stat-label">Attendance</div>
               <div class="stat-value" id="uiAttendance">— / —</div>
             </div>
+            <div class="stat">
+              <div class="stat-label">Monthly Advance Deducted</div>
+              <div class="stat-value" id="uiSummaryAdvance">₹0.00</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Remaining Debt Balance</div>
+              <div class="stat-value" id="uiSummaryRemainingDebt">₹0.00</div>
+            </div>
           </div>
         </div>
 
@@ -264,6 +312,8 @@
           </div>
           <div class="card-body">
             <div style="display:flex; justify-content:space-between; align-items:center; padding:0.55rem 0; border-bottom:1px solid #f0f0f5;"><span class="muted" style="font-size:0.86rem; font-weight:800;">Base Salary</span><strong id="uiBase">₹0.00</strong></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:0.55rem 0; border-bottom:1px solid #f0f0f5;"><span class="muted" style="font-size:0.86rem; font-weight:800;">Monthly Advance Deduction</span><strong id="uiAdvanceDeduction">-₹0.00</strong></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:0.55rem 0; border-bottom:1px solid #f0f0f5;"><span class="muted" style="font-size:0.86rem; font-weight:800;">Debt Recovery</span><strong id="uiDebtRecovery">-₹0.00</strong></div>
             <div style="display:flex; justify-content:space-between; align-items:center; padding:0.55rem 0; border-bottom:1px solid #f0f0f5;"><span class="muted" style="font-size:0.86rem; font-weight:800;">Bonus</span><strong id="uiBonus">₹0.00</strong></div>
             <div style="display:flex; justify-content:space-between; align-items:center; padding:0.55rem 0; border-bottom:1px solid #f0f0f5;"><span class="muted" style="font-size:0.86rem; font-weight:800;">Overtime</span><strong id="uiOT">₹0.00</strong></div>
             <div style="display:flex; justify-content:space-between; align-items:center; padding:0.55rem 0; border-bottom:1px solid #f0f0f5;"><span class="muted" style="font-size:0.86rem; font-weight:800;">Commission</span><strong id="uiComm">₹0.00</strong></div>
@@ -302,6 +352,8 @@
 <script>
 (function() {
   const monthly = parseFloat("{{ record.worker_monthly_salary }}") || 0;
+  const monthlyAdvance = parseFloat("{{ record.pocket_money_deduction or 0 }}") || 0;
+  const previousPendingDebt = parseFloat("{{ previous_debt }}") || 0;
 
   function formatINR(v) {
     return '₹' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -353,16 +405,23 @@
 
     const allowances = calculateAllowances(base);
 
-    // Current DB schema doesn't persist deductions separately on edit page;
-    // keep deductions at 0 for stable payable calculation.
-    const deductions = 0;
-    const finalPayable = allowances.totalEarnings - deductions;
+    const recoveryInput = document.getElementById('debt_recovery_amount');
+    let debtRecovery = Math.max(parseFloat(recoveryInput?.value) || 0, 0);
+    if (debtRecovery > previousPendingDebt) {
+      debtRecovery = previousPendingDebt;
+      if (recoveryInput) recoveryInput.value = debtRecovery.toFixed(2);
+    }
+    const remainingDebt = Math.max(previousPendingDebt - debtRecovery, 0);
+    const deductions = monthlyAdvance + debtRecovery;
+    const finalPayable = Math.max(allowances.totalEarnings - deductions, 0);
 
     // UI updates
     document.getElementById('uiPerDay').textContent = formatINR(perDay);
     document.getElementById('uiAttendance').textContent = attendedDays + ' / ' + totalDays;
 
     document.getElementById('uiBase').textContent = formatINR(base);
+    document.getElementById('uiAdvanceDeduction').textContent = '-' + formatINR(monthlyAdvance);
+    document.getElementById('uiDebtRecovery').textContent = '-' + formatINR(debtRecovery);
     document.getElementById('uiBonus').textContent = formatINR(allowances.bonusAmt);
     document.getElementById('uiOT').textContent = formatINR(allowances.otAmt);
     document.getElementById('uiComm').textContent = formatINR(allowances.commAmt);
@@ -370,6 +429,9 @@
     document.getElementById('uiTotalEarnings').textContent = formatINR(allowances.totalEarnings);
     document.getElementById('uiTotalDeductions').textContent = formatINR(deductions);
     document.getElementById('uiFinalPayable').textContent = formatINR(finalPayable);
+    document.getElementById('uiRemainingDebtBox').textContent = formatINR(remainingDebt);
+    document.getElementById('uiSummaryAdvance').textContent = formatINR(monthlyAdvance);
+    document.getElementById('uiSummaryRemainingDebt').textContent = formatINR(remainingDebt);
 
     // summary secure money
     setMoney(document.getElementById('payableAmount'), finalPayable);
@@ -396,7 +458,7 @@
     }
 
     // Inputs
-    ['total_days','attended_days','bonus_value','ot_value','comm_value'].forEach(id => {
+    ['total_days','attended_days','bonus_value','ot_value','comm_value','debt_recovery_amount'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.addEventListener('input', recalculate);
     });

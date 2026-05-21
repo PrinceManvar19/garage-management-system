@@ -1,10 +1,22 @@
 import calendar
 import datetime
 
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for
 
 from models.worker_model import create_worker, delete_worker, generate_next_worker_id, get_all_workers, get_worker, update_worker
 from models.salary_model import get_salary_records, get_salary_record, update_salary_record
+from models.advance_model import (
+    add_pocket_money_entry,
+    add_worker_debt,
+    apply_debt_recovery,
+    get_monthly_advance_summary,
+    get_monthly_pocket_money_count,
+    get_monthly_pocket_money_total,
+    get_outstanding_debt_total,
+    get_pocket_money_entries,
+    get_recovery_history,
+    get_worker_debts,
+)
 
 
 
@@ -91,16 +103,10 @@ def salary_calculator():
             return redirect(url_for("salary.salary_calculator"))
 
         try:
-            bonus_val = float(request.form.get("bonus_value") or 0)
-            ot_val = float(request.form.get("ot_value") or 0)
-            comm_val = float(request.form.get("comm_value") or 0)
+            debt_recovery_amount = float(request.form.get("debt_recovery_amount") or 0)
         except ValueError:
-            flash("Invalid numeric value", "error")
+            flash("Invalid debt recovery amount", "error")
             return redirect(url_for("salary.salary_calculator"))
-
-        bonus_pct = request.form.get("bonus_type") == "pct"
-        ot_pct = request.form.get("ot_type") == "pct"
-        comm_pct = request.form.get("comm_type") == "pct"
 
         month = request.form.get("month", "").strip()
         year = request.form.get("year", "").strip()
@@ -113,12 +119,13 @@ def salary_calculator():
 
         success, message, record_id = save_salary_record(
             worker_id, total_days, attended_days,
-            bonus_val, bonus_pct,
-            ot_val, ot_pct,
-            comm_val, comm_pct,
+            0, False,
+            0, False,
+            0, False,
             month=month if month else None,
             year=year,
-            salary_status=salary_status
+            salary_status=salary_status,
+            debt_recovery_amount=debt_recovery_amount,
         )
 
         if success:
@@ -139,6 +146,103 @@ def salary_calculator():
         current_total_days=current_total_days,
         year_options=year_options,
         days_by_period=days_by_period,
+    )
+
+
+@salary_bp.route("/advance-summary")
+def advance_summary():
+    admin_guard = _require_admin()
+    if admin_guard is not None:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    worker_id = request.args.get("worker_id", "").strip().upper()
+    month = request.args.get("month", "").strip()
+    year = request.args.get("year", "").strip()
+    if not worker_id or not month or not year:
+        return jsonify({"error": "Missing params"}), 400
+
+    pocket_entries = get_pocket_money_entries(worker_id=worker_id, month=month, year=year)
+    debts = get_worker_debts(worker_id=worker_id, open_only=True)
+    recoveries = get_recovery_history(worker_id=worker_id)
+    return jsonify({
+        "pocket_money_total": float(get_monthly_pocket_money_total(worker_id, month, year)),
+        "pocket_money_count": get_monthly_pocket_money_count(worker_id, month, year),
+        "pocket_entries": [
+            {
+                "entry_date": str(row.get("entry_date") or ""),
+                "amount": float(row.get("amount") or 0),
+                "note": row.get("note") or "",
+            }
+            for row in pocket_entries
+        ],
+        "outstanding_debt": float(get_outstanding_debt_total(worker_id)),
+        "debts": [
+            {
+                "id": row.get("id"),
+                "reason": row.get("reason") or "",
+                "debt_date": str(row.get("debt_date") or ""),
+                "remaining_balance": float(row.get("remaining_balance") or 0),
+            }
+            for row in debts
+        ],
+        "recoveries": [
+            {
+                "recovery_date": str(row.get("recovery_date") or ""),
+                "amount": float(row.get("recovery_amount") or 0),
+                "note": row.get("note") or "",
+            }
+            for row in recoveries[:8]
+        ],
+    })
+
+
+@salary_bp.route("/advances", methods=["GET", "POST"])
+def worker_advances():
+    admin_guard = _require_admin()
+    if admin_guard is not None:
+        return admin_guard
+
+    workers = get_all_workers()
+    now = datetime.datetime.now()
+    selected_worker = request.values.get("worker_id", "").strip().upper()
+    selected_month = request.values.get("month", f"{now.month:02d}").strip()
+    selected_year = request.values.get("year", str(now.year)).strip()
+
+    if request.method == "POST":
+        action = request.form.get("action", "").strip()
+        worker_id = request.form.get("worker_id", "").strip().upper()
+        entry_date = request.form.get("entry_date", "").strip() or now.strftime("%Y-%m-%d")
+        note = request.form.get("note", "").strip()
+
+        if action == "pocket":
+            success, message = add_pocket_money_entry(worker_id, request.form.get("amount"), entry_date, note)
+            flash("Monthly advance entry saved." if success else message, "success" if success else "error")
+        elif action == "debt":
+            success, message = add_worker_debt(worker_id, request.form.get("amount"), entry_date, note)
+            flash("Long-term advance saved." if success else message, "success" if success else "error")
+        elif action == "recovery":
+            success, message = apply_debt_recovery(worker_id, request.form.get("amount"), entry_date, note=note or "Manual recovery")
+            flash("Pending advance recovery saved." if success else message, "success" if success else "error")
+        else:
+            flash("Unknown advance action.", "error")
+
+        return redirect(url_for(
+            "salary.worker_advances",
+            worker_id=worker_id,
+            month=selected_month,
+            year=selected_year,
+        ))
+
+    return render_template(
+        "worker_advances.html",
+        workers=workers,
+        selected_worker=selected_worker,
+        selected_month=selected_month,
+        selected_year=selected_year,
+        pocket_entries=get_pocket_money_entries(selected_worker or None, selected_month, selected_year),
+        debts=get_worker_debts(selected_worker or None),
+        recoveries=get_recovery_history(selected_worker or None),
+        summaries=get_monthly_advance_summary(selected_worker or None, selected_month, selected_year),
     )
 
 
@@ -185,7 +289,8 @@ def edit_salary_record(record_id):
     # GET: allow viewing paid records too (UI will lock inputs / show banner)
     if request.method == "GET":
         worker = get_worker(record['worker_id'])
-        return render_template("salary_history_edit.html", record=record, worker=worker)
+        entries = get_pocket_money_entries(record["worker_id"], record.get("month"), record.get("year"))
+        return render_template("salary_history_edit.html", record=record, worker=worker, monthly_advance_entries=entries)
 
     
     # POST
@@ -195,6 +300,7 @@ def edit_salary_record(record_id):
         bonus_val = float(request.form.get("bonus_value") or 0)
         ot_val = float(request.form.get("ot_value") or 0)
         comm_val = float(request.form.get("comm_value") or 0)
+        debt_recovery_amount = float(request.form.get("debt_recovery_amount") or 0)
     except ValueError:
         flash("Invalid numeric value", "error")
         return redirect(url_for("salary.salary_history"))
@@ -214,7 +320,8 @@ def edit_salary_record(record_id):
         ot_pct=ot_pct,
         comm_val=comm_val,
         comm_pct=comm_pct,
-        salary_status=salary_status
+        salary_status=salary_status,
+        debt_recovery_amount=debt_recovery_amount,
     )
     if success:
         flash(message, "success")
@@ -223,7 +330,8 @@ def edit_salary_record(record_id):
         flash(message, "error")
         record = get_salary_record(record_id)
         worker = get_worker(record['worker_id']) if record else None
-        return render_template("salary_history_edit.html", record=record, worker=worker)
+        entries = get_pocket_money_entries(record["worker_id"], record.get("month"), record.get("year")) if record else []
+        return render_template("salary_history_edit.html", record=record, worker=worker, monthly_advance_entries=entries)
 
 @salary_bp.route("/<int:record_id>/mark-paid", methods=["POST"])
 def mark_salary_paid(record_id):

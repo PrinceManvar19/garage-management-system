@@ -1,6 +1,7 @@
 import json
 import os
-import sqlite3
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from pathlib import Path
 
 from flask import current_app, g
@@ -8,384 +9,551 @@ from flask import current_app, g
 
 def get_db():
     if "db" not in g:
-        db_path = current_app.config["DATABASE"]
-        directory = os.path.dirname(db_path)
-        if directory:
-            os.makedirs(directory, exist_ok=True)
-        connection = sqlite3.connect(db_path)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA journal_mode=DELETE")  # Prevent WAL OneDrive issues
+        database_url = current_app.config.get("DATABASE_URL") or os.getenv("DATABASE_URL")
+
+        if not database_url:
+            raise ValueError("DATABASE_URL environment variable not set")
+
+        connection = psycopg2.connect(database_url)
         g.db = connection
+
     return g.db
 
 
 def safe_execute(db_func, *args, **kwargs):
-    """Context manager wrapper for safe DB operations with logging."""
     try:
         return db_func(*args, **kwargs)
+
     except Exception as e:
         from utils.helpers import log_action
-        log_action("DB SAFE EXECUTE ERROR", f"{db_func.__name__} - {str(e)}")
+
+        log_action(
+            "DB SAFE EXECUTE ERROR",
+            f"{db_func.__name__} - {str(e)}"
+        )
+
         raise
 
 
 def close_db(_error=None):
     connection = g.pop("db", None)
+
     if connection is not None:
         connection.close()
 
 
+def query_dict(sql, params=None):
+    db = get_db()
+
+    cursor = db.cursor(cursor_factory=RealDictCursor)
+
+    try:
+        cursor.execute(sql, params or ())
+        return cursor.fetchall()
+
+    finally:
+        cursor.close()
+
+
+def query_dict_one(sql, params=None):
+    db = get_db()
+
+    cursor = db.cursor(cursor_factory=RealDictCursor)
+
+    try:
+        cursor.execute(sql, params or ())
+        return cursor.fetchone()
+
+    finally:
+        cursor.close()
+
+
+def execute_query(sql, params=None):
+    db = get_db()
+
+    cursor = db.cursor()
+
+    try:
+        cursor.execute(sql, params or ())
+        db.commit()
+
+    except psycopg2.Error:
+        db.rollback()
+        raise
+
+    finally:
+        cursor.close()
+
+
 def init_db():
     db = get_db()
-    db.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS customers (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            phone TEXT,
-            vehicle TEXT
-        );
 
-        CREATE TABLE IF NOT EXISTS admins (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            phone TEXT
-        );
+    cursor = db.cursor(cursor_factory=RealDictCursor)
 
-        CREATE TABLE IF NOT EXISTS bookings (
-            booking_id TEXT PRIMARY KEY,
-            customer_id TEXT,
-            name TEXT NOT NULL,
-            phone TEXT,
-            vehicle TEXT NOT NULL,
-            brand_model TEXT,
-            service TEXT NOT NULL,
-            date TEXT NOT NULL,
-            status TEXT NOT NULL,
-            created_at TEXT,
-            checked_in_at TEXT,
-            completed_at TEXT,
-            actual_visit_date TEXT,
-            is_rescheduled INTEGER NOT NULL DEFAULT 0,
-            whatsapp_sent INTEGER NOT NULL DEFAULT 0,
-            msg_approved_sent INTEGER NOT NULL DEFAULT 0,
-            msg_rejected_sent INTEGER NOT NULL DEFAULT 0,
-            msg_checkedin_sent INTEGER NOT NULL DEFAULT 0,
-            msg_completed_sent INTEGER NOT NULL DEFAULT 0
-        );
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS customers (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                phone TEXT,
+                vehicle TEXT
+            )
+        """)
 
-        CREATE TABLE IF NOT EXISTS slots (
-            date TEXT PRIMARY KEY,
-            total INTEGER NOT NULL DEFAULT 0
-        );
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS admins (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                phone TEXT
+            )
+        """)
 
-        CREATE TABLE IF NOT EXISTS audit_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            booking_id TEXT NOT NULL,
-            action TEXT NOT NULL,
-            performed_by TEXT,
-            performed_by_id TEXT,
-            details TEXT DEFAULT '{}',
-            created_at TEXT NOT NULL
-        );
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bookings (
+                booking_id TEXT PRIMARY KEY,
+                customer_id TEXT,
+                name TEXT NOT NULL,
+                phone TEXT,
+                vehicle TEXT NOT NULL,
+                brand_model TEXT,
+                service TEXT NOT NULL,
+                date TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at TEXT,
+                checked_in_at TEXT,
+                completed_at TEXT,
+                actual_visit_date TEXT,
+                is_rescheduled INTEGER NOT NULL DEFAULT 0,
+                whatsapp_sent INTEGER NOT NULL DEFAULT 0,
+                msg_approved_sent INTEGER NOT NULL DEFAULT 0,
+                msg_rejected_sent INTEGER NOT NULL DEFAULT 0,
+                msg_checkedin_sent INTEGER NOT NULL DEFAULT 0,
+                msg_completed_sent INTEGER NOT NULL DEFAULT 0
+            )
+        """)
 
-        CREATE TABLE IF NOT EXISTS workers (
-            id TEXT PRIMARY KEY,
-            name TEXT,
-            phone TEXT,
-            monthly_salary REAL
-        );
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS slots (
+                date TEXT PRIMARY KEY,
+                total INTEGER NOT NULL DEFAULT 0
+            )
+        """)
 
-        CREATE TABLE IF NOT EXISTS salary_records (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            worker_id TEXT,
-            month TEXT,
-            year INTEGER,
-            total_days INTEGER,
-            attended_days REAL,
-            per_day_salary REAL,
-            base_salary REAL,
-            bonus REAL,
-            overtime REAL,
-            commission REAL,
-            total_salary REAL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (worker_id) REFERENCES workers(id),
-            UNIQUE(worker_id, month, year)
-        );
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id SERIAL PRIMARY KEY,
+                booking_id TEXT NOT NULL,
+                action TEXT NOT NULL,
+                performed_by TEXT,
+                performed_by_id TEXT,
+                details TEXT DEFAULT '{}',
+                created_at TEXT NOT NULL
+            )
+        """)
 
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_workers_phone_unique ON workers(phone) WHERE phone IS NOT NULL AND phone <> '';
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS workers (
+                id TEXT PRIMARY KEY,
+                name TEXT,
+                phone TEXT,
+                monthly_salary REAL,
+                worker_status TEXT DEFAULT 'active'
+            )
+        """)
 
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_booking_id ON bookings(booking_id);
-        CREATE INDEX IF NOT EXISTS idx_booking_status ON bookings(status);
-        CREATE INDEX IF NOT EXISTS idx_booking_date ON bookings(date);
-        CREATE INDEX IF NOT EXISTS idx_customer_id ON bookings(customer_id);
-        CREATE INDEX IF NOT EXISTS idx_booking_phone_vehicle_date ON bookings(phone, vehicle, date);
-        CREATE INDEX IF NOT EXISTS idx_audit_booking_id ON audit_logs(booking_id);
-        CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action);
-        CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_logs(created_at);
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS salary_records (
+                id SERIAL PRIMARY KEY,
+                worker_id TEXT,
+                month TEXT,
+                year INTEGER,
+                total_days INTEGER,
+                attended_days REAL,
+                per_day_salary REAL,
+                base_salary REAL,
+                bonus REAL,
+                overtime REAL,
+                commission REAL,
+                gross_salary REAL DEFAULT 0,
+                pocket_money_deduction REAL DEFAULT 0,
+                monthly_advance_entry_count INTEGER DEFAULT 0,
+                previous_pending_debt REAL DEFAULT 0,
+                debt_recovery_deduction REAL DEFAULT 0,
+                remaining_debt_balance REAL DEFAULT 0,
+                final_payable_salary REAL DEFAULT 0,
+                net_salary REAL DEFAULT 0,
+                total_salary REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (worker_id) REFERENCES workers(id),
+                UNIQUE(worker_id, month, year)
+            )
+        """)
 
-        """
-    )
-    migrate_slots_table(db)
-    migrate_bookings_table(db)
-    seed_admins(db)
-    migrate_json_data()
-    migrate_customers_phone_unique(db)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS vehicles (
+                plate_number TEXT PRIMARY KEY,
+                customer_id TEXT NOT NULL,
+                brand TEXT DEFAULT '',
+                model TEXT DEFAULT '',
+                FOREIGN KEY (customer_id) REFERENCES customers(id)
+            )
+        """)
 
-    # Create vehicles table and migrate from customers.vehicle
-    db.executescript("""
-        CREATE TABLE IF NOT EXISTS vehicles (
-            plate_number TEXT PRIMARY KEY,
-            customer_id TEXT NOT NULL,
-            brand TEXT DEFAULT '',
-            model TEXT DEFAULT '',
-            FOREIGN KEY (customer_id) REFERENCES customers(id)
-        );
-    """)
-    migrate_vehicles()
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_workers_phone_unique
+            ON workers(phone)
+            WHERE phone IS NOT NULL AND phone <> ''
+        """)
+
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_phone_unique
+            ON customers(phone)
+            WHERE phone IS NOT NULL AND phone <> ''
+        """)
+
+        db.commit()
+
+        migrate_workers_table(cursor, db)
+        migrate_bookings_table(cursor, db)
+        migrate_salary_table(cursor, db)
+        migrate_service_reminders(cursor, db)
+        migrate_advance_tables(cursor, db)
+        seed_admins(cursor, db)
+        migrate_json_data(cursor, db)
+        migrate_vehicles(cursor, db)
+
+    except psycopg2.Error as e:
+        db.rollback()
+        raise e
+
+    finally:
+        cursor.close()
+
+
+def seed_admins(cursor, db):
+    cursor.execute("""
+        INSERT INTO admins (id, name, phone)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (id) DO NOTHING
+    """, (
+        "ADMIN001",
+        "Owner",
+        "9898135662"
+    ))
+
+    cursor.execute("""
+        INSERT INTO admins (id, name, phone)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (id) DO NOTHING
+    """, (
+        "ADMIN002",
+        "Manager",
+        ""
+    ))
+
     db.commit()
-
-
-def seed_admins(db):
-    db.executemany(
-        "INSERT OR IGNORE INTO admins (id, name, phone) VALUES (?, ?, ?)",
-        [
-            ("ADMIN001", "Owner", "9898135662"),
-            ("ADMIN002", "Manager", ""),
-        ],
-    )
 
 
 def _load_json_file(path, default):
     if not path.exists():
         return default
+
     with path.open("r", encoding="utf-8") as file:
         try:
             return json.load(file)
+
         except json.JSONDecodeError:
             return default
 
 
-def migrate_json_data():
-    db = get_db()
+def migrate_json_data(cursor, db):
     data_dir = Path(current_app.root_path) / "data"
 
     customers = _load_json_file(data_dir / "customers.json", [])
+
     for customer in customers:
         customer_id = (customer or {}).get("id", "").strip().upper()
+
         if not customer_id or customer_id.startswith("ADMIN"):
             continue
-        db.execute(
-            """
-            INSERT OR IGNORE INTO customers (id, name, phone, vehicle)
-            VALUES (?, ?, ?, ?)
-            """,
-            (
-                customer_id,
-                customer.get("name", "").strip(),
-                customer.get("phone", "").strip(),
-                customer.get("vehicle", "").strip().upper(),
-            ),
-        )
+
+        phone = customer.get("phone", "").strip()
+
+        existing_customer = None
+
+        if phone:
+            cursor.execute(
+                "SELECT id FROM customers WHERE phone = %s",
+                (phone,)
+            )
+
+            existing_customer = cursor.fetchone()
+
+        if existing_customer:
+            continue
+
+        cursor.execute("""
+            INSERT INTO customers (
+                id,
+                name,
+                phone,
+                vehicle
+            )
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (id) DO NOTHING
+        """, (
+            customer_id,
+            customer.get("name", "").strip(),
+            phone,
+            customer.get("vehicle", "").strip().upper(),
+        ))
 
     bookings = _load_json_file(data_dir / "bookings.json", [])
+
     for booking in bookings:
         booking_id = (booking or {}).get("booking_id", "").strip().upper()
+
         if not booking_id:
             continue
-        db.execute(
-            """
-            INSERT OR IGNORE INTO bookings (
-                booking_id, customer_id, name, phone, vehicle, brand_model,
-                service, date, status, created_at, checked_in_at, completed_at, whatsapp_sent
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                booking_id,
-                booking.get("customer_id", "").strip().upper(),
-                booking.get("name", "").strip(),
-                booking.get("phone", "").strip(),
-                booking.get("vehicle", "").strip().upper(),
-                booking.get("brand_model", "").strip(),
-                booking.get("service", "").strip(),
-                booking.get("date", "").strip(),
-                (booking.get("status", "pending") or "pending").strip().lower(),
-                booking.get("created_at", "") or "",
-                booking.get("checked_in_at"),
-                booking.get("completed_at"),
-                int(booking.get("whatsapp_sent", 0) or 0),
-            ),
-        )
 
-    slots = _load_json_file(data_dir / "slots.json", {})
-    if isinstance(slots, dict):
-        for date, slot in slots.items():
-            slot = slot or {}
-            db.execute(
-                """
-                INSERT OR IGNORE INTO slots (date, total)
-                VALUES (?, ?)
-                """,
-                (str(date).strip(), int(slot.get("total", 0) or 0)),
+        cursor.execute("""
+            INSERT INTO bookings (
+                booking_id,
+                customer_id,
+                name,
+                phone,
+                vehicle,
+                brand_model,
+                service,
+                date,
+                status,
+                created_at,
+                checked_in_at,
+                completed_at,
+                whatsapp_sent
+            )
+            VALUES (
+                %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s, %s, %s
+            )
+            ON CONFLICT (booking_id) DO NOTHING
+        """, (
+            booking_id,
+            booking.get("customer_id", "").strip().upper(),
+            booking.get("name", "").strip(),
+            booking.get("phone", "").strip(),
+            booking.get("vehicle", "").strip().upper(),
+            booking.get("brand_model", "").strip(),
+            booking.get("service", "").strip(),
+            booking.get("date", "").strip(),
+            (booking.get("status", "pending") or "pending").strip().lower(),
+            booking.get("created_at", "") or "",
+            booking.get("checked_in_at"),
+            booking.get("completed_at"),
+            int(booking.get("whatsapp_sent", 0) or 0),
+        ))
+
+    db.commit()
+
+
+def migrate_bookings_table(cursor, db):
+    cursor.execute("""
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'bookings'
+    """)
+
+    existing_columns = {
+        row["column_name"]
+        for row in cursor.fetchall()
+    }
+
+    message_flags = [
+        "msg_approved_sent",
+        "msg_rejected_sent",
+        "msg_checkedin_sent",
+        "msg_completed_sent"
+    ]
+
+    columns_to_add = []
+
+    for col in [
+        "whatsapp_sent",
+        "actual_visit_date",
+        "is_rescheduled",
+        "reminder_sent_at",
+        "reminder_snooze_until",
+        "service_reminder_sent"
+    ] + message_flags:
+
+        if col not in existing_columns:
+            columns_to_add.append(col)
+
+    for col in columns_to_add:
+        if col in ("actual_visit_date", "reminder_sent_at", "reminder_snooze_until"):
+            cursor.execute(
+                "ALTER TABLE bookings ADD COLUMN actual_visit_date TEXT"
+                if col == "actual_visit_date"
+                else f"ALTER TABLE bookings ADD COLUMN {col} TEXT"
+            )
+
+        else:
+            cursor.execute(
+                f"ALTER TABLE bookings ADD COLUMN {col} INTEGER NOT NULL DEFAULT 0"
             )
 
     db.commit()
 
 
-def migrate_slots_table(db):
-    slot_columns = {
-        row["name"]
-        for row in db.execute("PRAGMA table_info(slots)").fetchall()
+def migrate_workers_table(cursor, db):
+    cursor.execute("""
+        ALTER TABLE workers
+        ADD COLUMN IF NOT EXISTS worker_status TEXT DEFAULT 'active'
+    """)
+
+    cursor.execute("""
+        UPDATE workers
+        SET worker_status = 'active'
+        WHERE worker_status IS NULL OR TRIM(worker_status) = ''
+    """)
+
+    db.commit()
+
+
+def migrate_salary_table(cursor, db):
+    salary_columns = {
+        "salary_status": "TEXT NOT NULL DEFAULT 'finalized'",
+        "payment_status": "TEXT DEFAULT 'pending'",
+        "paid_at": "TEXT",
+        "payment_method": "TEXT",
+        "updated_at": "TEXT",
+        "gross_salary": "REAL DEFAULT 0",
+        "pocket_money_deduction": "REAL DEFAULT 0",
+        "monthly_advance_entry_count": "INTEGER DEFAULT 0",
+        "previous_pending_debt": "REAL DEFAULT 0",
+        "debt_recovery_deduction": "REAL DEFAULT 0",
+        "remaining_debt_balance": "REAL DEFAULT 0",
+        "final_payable_salary": "REAL DEFAULT 0",
+        "net_salary": "REAL DEFAULT 0",
     }
-    if "booked" not in slot_columns:
-        return
 
-    db.executescript(
-        """
-        ALTER TABLE slots RENAME TO slots_old;
+    for column, definition in salary_columns.items():
+        cursor.execute(f"""
+            ALTER TABLE salary_records
+            ADD COLUMN IF NOT EXISTS {column} {definition}
+        """)
 
-        CREATE TABLE slots (
-            date TEXT PRIMARY KEY,
-            total INTEGER NOT NULL DEFAULT 0
-        );
+    cursor.execute("""
+        UPDATE salary_records
+        SET gross_salary = COALESCE(NULLIF(gross_salary, 0), base_salary, total_salary, 0),
+            final_payable_salary = COALESCE(NULLIF(final_payable_salary, 0), total_salary, 0),
+            net_salary = COALESCE(NULLIF(net_salary, 0), total_salary, 0)
+    """)
 
-        INSERT INTO slots (date, total)
-        SELECT date, total
-        FROM slots_old;
-
-        DROP TABLE slots_old;
-        """
-    )
+    db.commit()
 
 
-def migrate_customers_phone_unique(db):
-    seen_phones = set()
-    rows = db.execute(
-        """
-        SELECT id, phone
+def migrate_service_reminders(cursor, db):
+    cursor.execute("""
+        ALTER TABLE bookings
+        ADD COLUMN IF NOT EXISTS reminder_sent_at TEXT
+    """)
+    cursor.execute("""
+        ALTER TABLE bookings
+        ADD COLUMN IF NOT EXISTS reminder_snooze_until TEXT
+    """)
+    cursor.execute("""
+        ALTER TABLE bookings
+        ADD COLUMN IF NOT EXISTS service_reminder_sent INTEGER NOT NULL DEFAULT 0
+    """)
+    db.commit()
+
+
+def migrate_advance_tables(cursor, db):
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS pocket_money_entries (
+            id SERIAL PRIMARY KEY,
+            worker_id TEXT NOT NULL,
+            amount NUMERIC(10,2) NOT NULL,
+            entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+            note TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (worker_id) REFERENCES workers(id)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS worker_debts (
+            id SERIAL PRIMARY KEY,
+            worker_id TEXT NOT NULL,
+            debt_amount NUMERIC(10,2) NOT NULL,
+            debt_date DATE NOT NULL DEFAULT CURRENT_DATE,
+            reason TEXT,
+            remaining_balance NUMERIC(10,2) NOT NULL,
+            status TEXT NOT NULL DEFAULT 'open',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (worker_id) REFERENCES workers(id)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS debt_recoveries (
+            id SERIAL PRIMARY KEY,
+            debt_id INTEGER NOT NULL,
+            worker_id TEXT NOT NULL,
+            salary_record_id INTEGER,
+            recovery_amount NUMERIC(10,2) NOT NULL,
+            recovery_date DATE NOT NULL DEFAULT CURRENT_DATE,
+            note TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (debt_id) REFERENCES worker_debts(id),
+            FOREIGN KEY (worker_id) REFERENCES workers(id),
+            FOREIGN KEY (salary_record_id) REFERENCES salary_records(id)
+        )
+    """)
+
+    db.commit()
+
+
+def migrate_vehicles(cursor, db):
+    cursor.execute("""
+        SELECT id, vehicle
         FROM customers
-        WHERE TRIM(COALESCE(phone, '')) <> ''
-        ORDER BY id ASC
-        """
-    ).fetchall()
+        WHERE vehicle IS NOT NULL
+        AND TRIM(vehicle) <> ''
+    """)
+
+    rows = cursor.fetchall()
 
     for row in rows:
-        normalized_phone = str(row["phone"] or "").strip()
-        if normalized_phone in seen_phones:
-            db.execute("UPDATE customers SET phone = '' WHERE id = ?", (row["id"],))
-            continue
-        seen_phones.add(normalized_phone)
-
-    db.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_phone_unique
-        ON customers(phone)
-        WHERE phone IS NOT NULL AND phone <> ''
-        """
-    )
-
-
-def migrate_bookings_table(db):
-    booking_columns = {
-        row["name"]
-        for row in db.execute("PRAGMA table_info(bookings)").fetchall()
-    }
-
-    message_flags = ["msg_approved_sent", "msg_rejected_sent", "msg_checkedin_sent", "msg_completed_sent"]
-
-    if "whatsapp_sent" not in booking_columns:
-        db.execute(
-            """
-            ALTER TABLE bookings
-            ADD COLUMN whatsapp_sent INTEGER NOT NULL DEFAULT 0
-            """
-        )
-
-    if "actual_visit_date" not in booking_columns:
-        db.execute(
-            """
-            ALTER TABLE bookings
-            ADD COLUMN actual_visit_date TEXT
-            """
-        )
-
-    if "is_rescheduled" not in booking_columns:
-        db.execute(
-            """
-            ALTER TABLE bookings
-            ADD COLUMN is_rescheduled INTEGER NOT NULL DEFAULT 0
-            """
-        )
-
-    for flag in message_flags:
-        if flag not in booking_columns:
-            db.execute(
-                f"""
-                ALTER TABLE bookings
-                ADD COLUMN {flag} INTEGER NOT NULL DEFAULT 0
-                """
-            )
-
-    db.execute(
-        """
-        UPDATE bookings
-        SET status = 'checked_in'
-        WHERE status = 'in_garage'
-        """
-    )
-
-    # Data migration for existing bookings
-    db.execute("""
-        UPDATE bookings
-        SET msg_approved_sent = 1
-        WHERE status IN ('checked_in', 'completed')
-    """)
-
-    db.execute("""
-        UPDATE bookings
-        SET msg_checkedin_sent = 1
-        WHERE status = 'checked_in'
-    """)
-
-    db.execute("""
-        UPDATE bookings
-        SET msg_completed_sent = 1
-        WHERE status = 'completed'
-    """)
-
-    # Reset rejected flag if any weird data
-    db.execute("""
-        UPDATE bookings
-        SET msg_rejected_sent = 0
-        WHERE status != 'rejected'
-    """)
-
-
-def migrate_vehicles():
-    """Migrate customers.vehicle to normalized vehicles table."""
-    db = get_db()
-    rows = db.execute(
-        "SELECT id, vehicle FROM customers WHERE vehicle IS NOT NULL AND TRIM(vehicle) <> ''"
-    ).fetchall()
-
-    for row in rows:
+        customer_id = row["id"]
         plate_number = row["vehicle"].strip().upper()
-        if plate_number:
-            db.execute(
-                """
-                INSERT OR IGNORE INTO vehicles
-                (plate_number, customer_id, brand, model)
-                VALUES (?, ?, '', '')
-                """,
-                (plate_number, row["id"])
+
+        if not plate_number:
+            continue
+
+        cursor.execute("""
+            INSERT INTO vehicles (
+                plate_number,
+                customer_id,
+                brand,
+                model
             )
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (plate_number) DO NOTHING
+        """, (
+            plate_number,
+            customer_id,
+            '',
+            ''
+        ))
 
     db.commit()
 
 
 def init_app(app):
     app.teardown_appcontext(close_db)
+
     with app.app_context():
         init_db()

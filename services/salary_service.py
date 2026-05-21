@@ -28,9 +28,11 @@ def calculate_salary(
     monthly_salary: float,
     total_days: int,
     attended_days: int,
-    bonus: Tuple[float, bool] = (0, False),  # (value, is_percent)
+    bonus: Tuple[float, bool] = (0, False),
     overtime: Tuple[float, bool] = (0, False),
-    commission: Tuple[float, bool] = (0, False)
+    commission: Tuple[float, bool] = (0, False),
+    pocket_money_deduction: float = 0,
+    debt_recovery_deduction: float = 0,
 ) -> Dict[str, Decimal]:
     """
     Calculate worker salary with breakdown.
@@ -62,7 +64,10 @@ def calculate_salary(
     overtime_amt = _convert_bonus(overtime[0], overtime[1], base_salary)
     commission_amt = _convert_bonus(commission[0], commission[1], base_salary)
     
-    total = base_salary + bonus_amt + overtime_amt + commission_amt
+    gross_salary = base_salary + bonus_amt + overtime_amt + commission_amt
+    pocket_money = max(_to_decimal(pocket_money_deduction), Decimal("0"))
+    debt_recovery = max(_to_decimal(debt_recovery_deduction), Decimal("0"))
+    total = max(gross_salary - pocket_money - debt_recovery, Decimal("0"))
     
     return {
         'per_day_salary': per_day,
@@ -70,7 +75,12 @@ def calculate_salary(
         'bonus_amount': bonus_amt,
         'overtime_amount': overtime_amt,
         'commission_amount': commission_amt,
-        'total_salary': total
+        'gross_salary': gross_salary,
+        'pocket_money_deduction': pocket_money,
+        'debt_recovery_deduction': debt_recovery,
+        'total_salary': total,
+        'final_payable_salary': total,
+        'net_salary': total,
     }
 
 

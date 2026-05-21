@@ -1,0 +1,146 @@
+{% extends "admin_base.html" %}
+{% block title %}Worker Advances - Admin{% endblock %}
+
+{% block content %}
+<style>
+  .adv-page { max-width:1320px; margin:0 auto; padding:2rem 1.5rem 3rem; }
+  .adv-head { display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap; margin-bottom:1.25rem; }
+  .adv-title { display:flex; align-items:center; gap:0.85rem; }
+  .adv-icon { width:50px; height:50px; border-radius:12px; background:#17171b; color:#fff; display:flex; align-items:center; justify-content:center; }
+  .adv-title h1 { margin:0; font-family:var(--font-head); font-size:1.5rem; font-weight:900; }
+  .adv-title p { margin:0.15rem 0 0; color:var(--text-muted); }
+  .grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1rem; align-items:start; }
+  .card { background:#fff; border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow-card); overflow:hidden; }
+  .card-head { padding:1rem 1.1rem; background:#fafafa; border-bottom:1px solid var(--border); }
+  .card-head h3 { margin:0; font-family:var(--font-head); font-size:0.95rem; font-weight:900; display:flex; align-items:center; gap:0.5rem; }
+  .card-body { padding:1.1rem; }
+  .label { display:block; color:var(--text-muted); font-size:0.73rem; font-weight:900; letter-spacing:0.06em; text-transform:uppercase; margin-bottom:0.35rem; }
+  .input,.select { width:100%; padding:0.62rem 0.75rem; border:1.5px solid var(--border); border-radius:9px; background:#fff; color:var(--text-dark); outline:none; }
+  .field { margin-bottom:0.85rem; }
+  .btn-main { border:0; border-radius:10px; padding:0.72rem 0.95rem; background:#a20405; color:#fff; font-weight:900; display:inline-flex; align-items:center; gap:0.45rem; justify-content:center; width:100%; }
+  .filter { display:grid; grid-template-columns:1.4fr 1fr 1fr auto; gap:0.8rem; align-items:end; margin-bottom:1rem; }
+  .table { width:100%; min-width:980px; border-collapse:collapse; }
+  .table th { padding:0.72rem 0.85rem; background:#f5f5f7; color:#6b7280; font-size:0.72rem; font-weight:900; letter-spacing:0.06em; text-transform:uppercase; }
+  .table td { padding:0.78rem 0.85rem; border-bottom:1px solid #f0f0f3; vertical-align:middle; }
+  .summary-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; margin:1.1rem 0; }
+  .summary { background:#fff; border:1px solid var(--border); border-radius:12px; padding:1rem; }
+  .summary span { display:block; color:var(--text-muted); font-size:0.75rem; font-weight:900; text-transform:uppercase; }
+  .summary strong { display:block; margin-top:0.25rem; font-family:var(--font-head); font-size:1.25rem; color:var(--accent); }
+  @media (max-width:1050px) { .grid,.filter,.summary-grid { grid-template-columns:1fr; } .adv-page { padding:1.25rem 4% 2.5rem; } }
+</style>
+
+{% set month_names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'] %}
+
+<div class="adv-page">
+  <div class="adv-head">
+    <div class="adv-title">
+      <div class="adv-icon"><i class="fas fa-hand-holding-dollar"></i></div>
+      <div>
+        <h1>Worker Advances</h1>
+        <p>Track monthly advances, long-term advances, recoveries, and remaining balances.</p>
+      </div>
+    </div>
+  </div>
+
+  <form method="GET" class="filter">
+    <div>
+      <label class="label">Worker-wise Filter</label>
+      <select class="select" name="worker_id">
+        <option value="">All Workers</option>
+        {% for w in workers %}
+        <option value="{{ w.id }}" {% if selected_worker == w.id %}selected{% endif %}>{{ w.id }} - {{ w.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="label">Month</label>
+      <select class="select" name="month">
+        {% for m in range(1,13) %}
+        <option value="{{ '%02d'|format(m) }}" {% if selected_month == '%02d'|format(m) %}selected{% endif %}>{{ month_names[m - 1] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="label">Year</label>
+      <input class="input" type="number" name="year" min="2020" max="2100" value="{{ selected_year }}">
+    </div>
+    <button class="btn-main" type="submit"><i class="fas fa-search"></i> Apply</button>
+  </form>
+
+  <div class="grid">
+    <section class="card">
+      <div class="card-head"><h3><i class="fas fa-wallet"></i> Add Monthly Advance Entry</h3></div>
+      <div class="card-body">
+        <form method="POST">
+          <input type="hidden" name="action" value="pocket">
+          <div class="field"><label class="label">Worker</label><select class="select" name="worker_id" required>{% for w in workers %}<option value="{{ w.id }}" {% if selected_worker == w.id %}selected{% endif %}>{{ w.id }} - {{ w.name }}</option>{% endfor %}</select></div>
+          <div class="field"><label class="label">Amount</label><input class="input" type="number" name="amount" min="1" step="0.01" required></div>
+          <div class="field"><label class="label">Date</label><input class="input" type="date" name="entry_date" required></div>
+          <div class="field"><label class="label">Note / Reason</label><input class="input" type="text" name="note" placeholder="Tea, fuel, family need"></div>
+          <button class="btn-main" type="submit"><i class="fas fa-plus"></i> Save Entry</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3><i class="fas fa-scale-unbalanced"></i> Add Long-Term Advance</h3></div>
+      <div class="card-body">
+        <form method="POST">
+          <input type="hidden" name="action" value="debt">
+          <div class="field"><label class="label">Worker</label><select class="select" name="worker_id" required>{% for w in workers %}<option value="{{ w.id }}" {% if selected_worker == w.id %}selected{% endif %}>{{ w.id }} - {{ w.name }}</option>{% endfor %}</select></div>
+          <div class="field"><label class="label">Advance Amount</label><input class="input" type="number" name="amount" min="1" step="0.01" required></div>
+          <div class="field"><label class="label">Advance Date</label><input class="input" type="date" name="entry_date" required></div>
+          <div class="field"><label class="label">Reason</label><input class="input" type="text" name="note" placeholder="Paid above earned salary"></div>
+          <button class="btn-main" type="submit"><i class="fas fa-plus"></i> Save Long-Term Advance</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3><i class="fas fa-rotate-left"></i> Recover Pending Advance</h3></div>
+      <div class="card-body">
+        <form method="POST">
+          <input type="hidden" name="action" value="recovery">
+          <div class="field"><label class="label">Worker</label><select class="select" name="worker_id" required>{% for w in workers %}<option value="{{ w.id }}" {% if selected_worker == w.id %}selected{% endif %}>{{ w.id }} - {{ w.name }}</option>{% endfor %}</select></div>
+          <div class="field"><label class="label">Recovery Amount</label><input class="input" type="number" name="amount" min="1" step="0.01" required></div>
+          <div class="field"><label class="label">Recovery Date</label><input class="input" type="date" name="entry_date" required></div>
+          <div class="field"><label class="label">Note</label><input class="input" type="text" name="note" placeholder="Manual owner recovery"></div>
+          <button class="btn-main" type="submit"><i class="fas fa-check"></i> Save Recovery</button>
+        </form>
+      </div>
+    </section>
+  </div>
+
+  <div class="summary-grid">
+    {% for s in summaries %}
+    <div class="summary">
+      <span>{{ s.worker_name }} ({{ s.worker_id }})</span>
+      <strong>₹{{ "%.2f"|format(s.pocket_money_total|float) }} monthly advance / ₹{{ "%.2f"|format(s.outstanding_debt|float) }} pending debt</strong>
+    </div>
+    {% endfor %}
+  </div>
+
+  <section class="card">
+    <div class="card-head"><h3><i class="fas fa-list"></i> History</h3></div>
+    <div class="table-responsive">
+      <table class="table">
+        <thead><tr><th>Type</th><th>Worker</th><th>Date</th><th>Amount</th><th>Reason / Note</th><th>Remaining</th></tr></thead>
+        <tbody>
+          {% for row in pocket_entries %}
+          <tr><td>Monthly Advance</td><td>{{ row.worker_name }}</td><td>{{ row.entry_date }}</td><td>₹{{ "%.2f"|format(row.amount|float) }}</td><td>{{ row.note or '-' }}</td><td>-</td></tr>
+          {% endfor %}
+          {% for row in debts %}
+          <tr><td>Long-Term Advance</td><td>{{ row.worker_name }}</td><td>{{ row.debt_date }}</td><td>₹{{ "%.2f"|format(row.debt_amount|float) }}</td><td>{{ row.reason or '-' }}</td><td>₹{{ "%.2f"|format(row.remaining_balance|float) }}</td></tr>
+          {% endfor %}
+          {% for row in recoveries %}
+          <tr><td>Recovery</td><td>{{ row.worker_name }}</td><td>{{ row.recovery_date }}</td><td>₹{{ "%.2f"|format(row.recovery_amount|float) }}</td><td>{{ row.note or row.debt_reason or '-' }}</td><td>-</td></tr>
+          {% endfor %}
+          {% if not pocket_entries and not debts and not recoveries %}
+          <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:2rem;">No advance history found.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

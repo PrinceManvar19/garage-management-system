@@ -29,15 +29,17 @@
   .attendance-bar { height:8px; border-radius:999px; background:#ececf0; overflow:hidden; margin-top:0.75rem; }
   .attendance-fill { height:100%; width:0; border-radius:999px; background:linear-gradient(90deg,#a20405,#d9393a); transition:width .22s; }
   .earnings-list { display:grid; gap:0.75rem; }
-  .earning-row { display:grid; grid-template-columns:44px 1fr 205px 110px; gap:0.75rem; align-items:center; padding:0.75rem; border:1px solid #eeeeF2; border-radius:12px; background:#fff; }
+  .earning-row { display:grid; grid-template-columns:44px 1fr 160px; gap:0.75rem; align-items:center; padding:0.75rem; border:1px solid #eeeeF2; border-radius:12px; background:#fff; }
   .earning-icon { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; }
   .earning-title { font-weight:900; color:var(--text-dark); line-height:1.15; }
   .earning-sub { color:var(--text-muted); font-size:0.76rem; margin-top:0.12rem; }
   .earning-amount { text-align:right; font-family:var(--font-head); font-weight:900; }
   .base .earning-icon { color:#2563eb; background:#eff6ff; }
-  .bonus .earning-icon { color:#c2410c; background:#fff7ed; }
-  .ot .earning-icon { color:#067647; background:#ecfdf3; }
-  .comm .earning-icon { color:#7c3aed; background:#f5f3ff; }
+  .pocket .earning-icon { color:#c2410c; background:#fff7ed; }
+  .debt .earning-icon { color:#7c3aed; background:#f5f3ff; }
+  .history-list { display:none; margin-top:0.8rem; border-top:1px solid #f0f0f3; padding-top:0.8rem; color:var(--text-muted); font-size:0.84rem; }
+  .history-list.is-open { display:block; }
+  .history-list div { display:flex; justify-content:space-between; gap:0.75rem; padding:0.28rem 0; border-bottom:1px dashed #eeeeF2; }
   .toggle { display:grid; grid-template-columns:1fr 1fr; border:1.5px solid var(--border); border-radius:9px; overflow:hidden; }
   .toggle input { display:none; }
   .toggle label { margin:0; padding:0.48rem 0.5rem; text-align:center; cursor:pointer; font-size:0.78rem; font-weight:900; color:#4b5563; }
@@ -66,7 +68,7 @@
       <div class="salary-icon"><i class="fas fa-file-invoice-dollar"></i></div>
       <div>
         <h1>Salary Calculator</h1>
-        <p>Build a payslip with period, attendance, earnings, and instant net payable.</p>
+        <p>Build a payslip with attendance, monthly advance deduction, pending advance recovery, and final payable.</p>
       </div>
     </div>
     <a href="{{ url_for('salary.salary_history') }}" class="btn-ghost" data-loading-text="Loading...">
@@ -174,33 +176,40 @@
 
         <section class="pay-card">
           <div class="pay-card-header">
-            <h3><i class="fas fa-chart-line"></i> Earnings & Allowances</h3>
+            <h3><i class="fas fa-receipt"></i> Salary Breakdown</h3>
           </div>
           <div class="pay-card-body">
             <div class="earnings-list">
               <div class="earning-row base">
                 <div class="earning-icon"><i class="fas fa-coins"></i></div>
                 <div><div class="earning-title">Base Salary</div><div class="earning-sub" id="baseSub">Based on attendance</div></div>
-                <div></div>
                 <div class="earning-amount" id="baseAmount">&#8377;0.00</div>
               </div>
 
-              {% for key, label, icon, klass in [('bonus','Bonus','fa-gift','bonus'),('ot','Overtime','fa-clock','ot'),('comm','Commission','fa-chart-pie','comm')] %}
-              <div class="earning-row {{ klass }}">
-                <div class="earning-icon"><i class="fas {{ icon }}"></i></div>
-                <div><div class="earning-title">{{ label }}</div><div class="earning-sub">Amount or percentage of base salary</div></div>
+              <div class="earning-row pocket">
+                <div class="earning-icon"><i class="fas fa-wallet"></i></div>
                 <div>
-                  <div class="toggle">
-                    <input type="radio" name="{{ key }}_type" id="{{ key }}_amt" value="amt" checked>
-                    <label for="{{ key }}_amt">&#8377;</label>
-                    <input type="radio" name="{{ key }}_type" id="{{ key }}_pct" value="pct">
-                    <label for="{{ key }}_pct">%</label>
-                  </div>
-                  <input type="number" class="salary-input mt-2" id="{{ key }}_value" name="{{ key }}_value" value="0" min="0" step="0.01">
+                  <div class="earning-title">Monthly Advances</div>
+                  <div class="earning-sub" id="pocketSub">Auto deducted from this salary</div>
+                  <button type="button" class="btn-ghost" id="togglePocketHistory" style="margin-top:0.55rem; padding:0.35rem 0.65rem;">View Entry History</button>
+                  <div class="history-list" id="pocketHistory"></div>
                 </div>
-                <div class="earning-amount" id="{{ key }}Amount">&#8377;0.00</div>
+                <div class="earning-amount" id="pocketAmount">&#8377;0.00</div>
               </div>
-              {% endfor %}
+
+              <div class="earning-row debt">
+                <div class="earning-icon"><i class="fas fa-scale-unbalanced"></i></div>
+                <div>
+                  <div class="earning-title">Pending Long-Term Advance</div>
+                  <div class="earning-sub" id="debtSub">Owner-controlled recovery from pending advance</div>
+                  <div style="margin-top:0.7rem;">
+                    <label class="salary-label" for="debt_recovery_amount">Recover Pending Advance</label>
+                    <input type="number" class="salary-input" id="debt_recovery_amount" name="debt_recovery_amount" min="0" step="0.01" value="0">
+                  </div>
+                  <div class="history-list is-open" id="debtHistory"></div>
+                </div>
+                <div class="earning-amount" id="debtOutstanding">&#8377;0.00</div>
+              </div>
             </div>
           </div>
         </section>
@@ -208,16 +217,16 @@
 
       <aside class="summary-card">
         <div class="summary-head">
-          <div class="summary-label">Net Payable</div>
+          <div class="summary-label">Final Payable Salary</div>
           <div class="summary-total">&#8377;<span id="totalAmount">0.00</span></div>
         </div>
         <div class="summary-body">
           <div class="summary-row"><span>Attendance</span><strong id="summaryAttendance">0 / 0</strong></div>
           <div class="summary-row"><span>Base Salary</span><strong id="summaryBase">&#8377;0.00</strong></div>
-          <div class="summary-row"><span>Bonus</span><strong id="summaryBonus">&#8377;0.00</strong></div>
-          <div class="summary-row"><span>Overtime</span><strong id="summaryOT">&#8377;0.00</strong></div>
-          <div class="summary-row"><span>Commission</span><strong id="summaryComm">&#8377;0.00</strong></div>
-<div class="summary-row net"><span>Total Earnings</span><strong id="summaryNet">&#8377;0.00</strong></div>
+          <div class="summary-row"><span>Monthly Advance Deducted</span><strong id="summaryPocket">-&#8377;0.00</strong></div>
+          <div class="summary-row"><span>Pending Advance Recovered</span><strong id="summaryDebtRecovery">-&#8377;0.00</strong></div>
+          <div class="summary-row"><span>Remaining Debt Balance</span><strong id="summaryDebtBalance">&#8377;0.00</strong></div>
+<div class="summary-row net"><span>Final Payable Salary</span><strong id="summaryNet">&#8377;0.00</strong></div>
 
 <input type="hidden" name="salary_status" id="salary_status_hidden" value="finalized">
 <input type="hidden" name="generate_slip" id="generate_slip_flag" value="0">
@@ -246,6 +255,9 @@
 (function() {
   'use strict';
   let monthly = 0;
+  let pocketMoneyTotal = 0;
+  let pocketMoneyCount = 0;
+  let outstandingDebt = 0;
   const daysByPeriodEl = document.getElementById('daysByPeriodData');
   const daysByPeriod = daysByPeriodEl ? JSON.parse(daysByPeriodEl.textContent || '{}') : {};
 
@@ -263,16 +275,6 @@
     return new Date(Number(year), Number(month), 0).getDate();
   }
 
-  function selectedType(name) {
-    const checked = document.querySelector('input[name="' + name + '_type"]:checked');
-    return checked ? checked.value : 'amt';
-  }
-
-  function allowanceAmount(name, base) {
-    const value = parseFloat(document.getElementById(name + '_value').value) || 0;
-    return selectedType(name) === 'pct' ? (base * value / 100) : value;
-  }
-
   function recalculate() {
     const totalDaysEl = document.getElementById('total_days');
     const attendedEl = document.getElementById('attended_days');
@@ -285,26 +287,78 @@
 
     const perDay = totalDays > 0 ? monthly / totalDays : 0;
     const base = perDay * attendedDays;
-    const bonus = allowanceAmount('bonus', base);
-    const ot = allowanceAmount('ot', base);
-    const comm = allowanceAmount('comm', base);
-    const total = base + bonus + ot + comm;
+    const recoveryInput = document.getElementById('debt_recovery_amount');
+    let debtRecovery = Math.max(parseFloat(recoveryInput.value) || 0, 0);
+    const maxRecoverable = Math.max(Math.min(outstandingDebt, base - pocketMoneyTotal), 0);
+    if (debtRecovery > maxRecoverable) {
+      debtRecovery = maxRecoverable;
+      recoveryInput.value = debtRecovery.toFixed(2);
+    }
+    const remainingDebt = Math.max(outstandingDebt - debtRecovery, 0);
+    const total = Math.max(base - pocketMoneyTotal - debtRecovery, 0);
     const pct = totalDays > 0 ? Math.round(attendedDays / totalDays * 100) : 0;
 
     document.getElementById('wiPerDay').innerHTML = inr(perDay);
     document.getElementById('baseAmount').innerHTML = inr(base);
     document.getElementById('baseSub').textContent = attendedDays + ' of ' + totalDays + ' days';
-    document.getElementById('bonusAmount').innerHTML = inr(bonus);
-    document.getElementById('otAmount').innerHTML = inr(ot);
-    document.getElementById('commAmount').innerHTML = inr(comm);
+    document.getElementById('pocketAmount').innerHTML = inr(pocketMoneyTotal);
+    document.getElementById('pocketSub').textContent = pocketMoneyCount + ' entr' + (pocketMoneyCount === 1 ? 'y' : 'ies') + ' auto deducted';
+    document.getElementById('debtOutstanding').innerHTML = inr(outstandingDebt);
     document.getElementById('totalAmount').textContent = Number(total).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     document.getElementById('summaryAttendance').textContent = attendedDays + ' / ' + totalDays;
     document.getElementById('summaryBase').innerHTML = inr(base);
-    document.getElementById('summaryBonus').innerHTML = inr(bonus);
-    document.getElementById('summaryOT').innerHTML = inr(ot);
-    document.getElementById('summaryComm').innerHTML = inr(comm);
+    document.getElementById('summaryPocket').innerHTML = '-' + inr(pocketMoneyTotal);
+    document.getElementById('summaryDebtRecovery').innerHTML = '-' + inr(debtRecovery);
+    document.getElementById('summaryDebtBalance').innerHTML = inr(remainingDebt);
     document.getElementById('summaryNet').innerHTML = inr(total);
     document.getElementById('attendanceFill').style.width = pct + '%';
+  }
+
+  function renderHistory(container, rows, emptyText) {
+    if (!container) return;
+    if (!rows || !rows.length) {
+      container.innerHTML = '<div><span>' + emptyText + '</span><strong></strong></div>';
+      return;
+    }
+    container.innerHTML = rows.map(function(row) {
+      const date = row.entry_date || row.debt_date || row.recovery_date || '-';
+      const amount = row.amount || row.remaining_balance || 0;
+      const note = row.note || row.reason || '';
+      return '<div><span>' + date + (note ? ' - ' + note : '') + '</span><strong>' + inr(amount) + '</strong></div>';
+    }).join('');
+  }
+
+  function fetchAdvanceSummary() {
+    const workerId = document.getElementById('worker_id').value;
+    const month = document.getElementById('month').value;
+    const year = document.getElementById('year').value;
+    if (!workerId || !month || !year) {
+      pocketMoneyTotal = 0;
+      pocketMoneyCount = 0;
+      outstandingDebt = 0;
+      renderHistory(document.getElementById('pocketHistory'), [], 'Select a worker to view monthly advance history');
+      renderHistory(document.getElementById('debtHistory'), [], 'No outstanding debt');
+      recalculate();
+      return;
+    }
+
+    fetch('/admin/salary/advance-summary?worker_id=' + encodeURIComponent(workerId) + '&month=' + encodeURIComponent(month) + '&year=' + encodeURIComponent(year))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.error) return;
+        pocketMoneyTotal = Number(data.pocket_money_total || 0);
+        pocketMoneyCount = Number(data.pocket_money_count || 0);
+        outstandingDebt = Number(data.outstanding_debt || 0);
+        renderHistory(document.getElementById('pocketHistory'), data.pocket_entries || [], 'No monthly advance entries this month');
+        renderHistory(document.getElementById('debtHistory'), data.debts || [], 'No outstanding debt');
+        recalculate();
+      })
+      .catch(function() {
+        pocketMoneyTotal = 0;
+        pocketMoneyCount = 0;
+        outstandingDebt = 0;
+        recalculate();
+      });
   }
 
   function loadWorker() {
@@ -313,6 +367,7 @@
     monthly = option && option.value ? (parseFloat(option.dataset.monthly) || 0) : 0;
     document.getElementById('wiId').textContent = option && option.value ? option.value : 'Select worker';
     document.getElementById('wiMonthly').innerHTML = inr(monthly);
+    fetchAdvanceSummary();
     recalculate();
   }
 
@@ -322,6 +377,7 @@
     const days = daysInMonth(month, year);
     document.getElementById('total_days').value = days;
     document.getElementById('attended_days').value = Math.min(parseFloat(document.getElementById('attended_days').value) || days, days);
+    fetchAdvanceSummary();
     recalculate();
   }
 
@@ -338,18 +394,15 @@
     document.getElementById(id).addEventListener('change', updatePeriodDays);
   });
 
-  ['worker_id','total_days','attended_days','bonus_value','ot_value','comm_value'].forEach(function(id) {
+  ['worker_id','total_days','attended_days','debt_recovery_amount'].forEach(function(id) {
     document.getElementById(id).addEventListener(
       id === 'worker_id' ? 'change' : 'input',
       id === 'worker_id' ? loadWorker : recalculate
     );
   });
 
-
-  ['bonus','ot','comm'].forEach(function(name) {
-    document.querySelectorAll('input[name="' + name + '_type"]').forEach(function(input) {
-      input.addEventListener('change', recalculate);
-    });
+  document.getElementById('togglePocketHistory')?.addEventListener('click', function() {
+    document.getElementById('pocketHistory')?.classList.toggle('is-open');
   });
   // --- Attendance auto-fill integration ---
   var attMode = 'manual'; // 'manual' | 'auto'
