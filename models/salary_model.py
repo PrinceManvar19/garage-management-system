@@ -81,6 +81,7 @@ def ensure_advance_salary_columns():
             "previous_pending_debt": "REAL DEFAULT 0",
             "debt_recovery_deduction": "REAL DEFAULT 0",
             "remaining_debt_balance": "REAL DEFAULT 0",
+            "extra_salary": "REAL DEFAULT 0",
             "final_payable_salary": "REAL DEFAULT 0",
             "net_salary": "REAL DEFAULT 0",
         }
@@ -210,6 +211,8 @@ def save_salary_record(
     payment_method=None,
     payment_status=None,
     debt_recovery_amount=0,
+    extra_salary_amount=0,
+    extra_salary_note="Extra salary advance",
 ):
     """
     Save salary calculation to salary_records.
@@ -287,9 +290,12 @@ def save_salary_record(
     gross = calc_result['gross_salary']
     total = calc_result['total_salary']
 
-    final_payable_salary = total
-    net_salary = total
-    remaining_debt_balance = max(outstanding_before - debt_recovery, Decimal("0"))
+    extra_salary = Decimal(str(extra_salary_amount or 0)).quantize(Decimal("0.01"))
+    if extra_salary < 0:
+        extra_salary = Decimal("0")
+    final_payable_salary = total + extra_salary
+    net_salary = total + extra_salary
+    remaining_debt_balance = max(outstanding_before - debt_recovery, Decimal("0")) + extra_salary
 
     cursor = None
 
@@ -311,7 +317,7 @@ def save_salary_record(
             "worker_id", "month", "year", "total_days", "attended_days",
             "per_day_salary", "base_salary", "bonus", "overtime", "commission",
             "gross_salary", "pocket_money_deduction", "monthly_advance_entry_count",
-            "previous_pending_debt", "debt_recovery_deduction",
+            "previous_pending_debt", "debt_recovery_deduction", "extra_salary",
             "remaining_debt_balance", "final_payable_salary", "net_salary", "total_salary",
             "salary_status",
         ]
@@ -319,7 +325,7 @@ def save_salary_record(
             worker_id, month, year, total_days, attended_days,
             float(per_day), float(base), float(bonus_amt), float(ot_amt), float(comm_amt),
             float(gross), float(pocket_money_total), pocket_money_count,
-            float(outstanding_before), float(debt_recovery),
+            float(outstanding_before), float(debt_recovery), float(extra_salary),
             float(remaining_debt_balance), float(final_payable_salary), float(net_salary), float(total),
             salary_status,
         ]
@@ -367,7 +373,28 @@ def save_salary_record(
                 """, (float(recovered), float(remaining_after), record_id))
                 db.commit()
                 cursor.close()
-        
+
+        # If admin gave extra salary, log it as a new worker debt automatically
+        if extra_salary > 0 and record_id:
+            from models.advance_model import add_worker_debt
+            debt_date = datetime.date.today().isoformat()
+            added, debt_id = add_worker_debt(
+                worker_id=worker_id,
+                debt_amount=float(extra_salary),
+                debt_date=debt_date,
+                reason=extra_salary_note or "Extra salary advance",
+            )
+            if added:
+                updated_total_debt = get_outstanding_debt_total(worker_id)
+                cursor = db.cursor()
+                cursor.execute("""
+                    UPDATE salary_records
+                    SET remaining_debt_balance = %s
+                    WHERE id = %s
+                """, (float(updated_total_debt), record_id))
+                db.commit()
+                cursor.close()
+
         log_action("SALARY_RECORD_SAVED", f"{worker_id} {month}/{year} total={total:.2f}")
         return True, "Salary record saved successfully", record_id
     except psycopg2.Error as e:
@@ -524,7 +551,7 @@ def delete_salary_record(record_id):
         return False, f"Delete failed: {str(e)}"
 
 
-def update_salary_record(record_id, total_days=None, attended_days=None, bonus_val=None, bonus_pct=None, ot_val=None, ot_pct=None, comm_val=None, comm_pct=None, salary_status=None):
+def update_salary_record(record_id, total_days=None, attended_days=None, bonus_val=None, bonus_pct=None, ot_val=None, ot_pct=None, comm_val=None, comm_pct=None, debt_recovery_amount=None, extra_salary_amount=None, extra_salary_note="Extra salary advance", salary_status=None):
     """
     Update salary record fields. Recalculates all salary values.
     Returns (success, message).
@@ -570,6 +597,11 @@ def update_salary_record(record_id, total_days=None, attended_days=None, bonus_v
     ))
     debt_recovery = min(max(requested_recovery, Decimal("0")), max(previous_pending_debt, Decimal("0")))
 
+    previous_extra_salary = Decimal(str(record.get("extra_salary") or 0))
+    extra_salary = Decimal(str(previous_extra_salary if extra_salary_amount is None else extra_salary_amount or 0))
+    if extra_salary < 0:
+        extra_salary = Decimal("0")
+
     salary_status = _normalize_salary_status(salary_status, record.get("salary_status") or "finalized")
 
 
@@ -597,10 +629,10 @@ def update_salary_record(record_id, total_days=None, attended_days=None, bonus_v
     total = calc_result['total_salary']
 
     # Persist payable-aligned fields too (required for correct PDF/render).
-    final_payable_salary = total
-    net_payable = total
-    net_salary = total
-    remaining_debt_balance = max(previous_pending_debt - debt_recovery, Decimal("0"))
+    final_payable_salary = total + extra_salary
+    net_payable = total + extra_salary
+    net_salary = total + extra_salary
+    remaining_debt_balance = max(previous_pending_debt - debt_recovery, Decimal("0")) + extra_salary
 
     # Check which columns exist (avoid breaking old DBs).
     columns = {
@@ -637,6 +669,9 @@ def update_salary_record(record_id, total_days=None, attended_days=None, bonus_v
     if "final_payable_salary" in columns:
         set_parts.append("final_payable_salary = %s")
         params.append(float(final_payable_salary))
+    if "extra_salary" in columns:
+        set_parts.append("extra_salary = %s")
+        params.append(float(extra_salary))
     if "debt_recovery_deduction" in columns:
         set_parts.append("debt_recovery_deduction = %s")
         params.append(float(debt_recovery))
@@ -667,6 +702,26 @@ def update_salary_record(record_id, total_days=None, attended_days=None, bonus_v
         from models.db import execute_query
         execute_query(sql, tuple(params))
         get_db().commit()
+
+        if extra_salary > previous_extra_salary:
+            debt_diff = extra_salary - previous_extra_salary
+            if debt_diff > 0:
+                from models.advance_model import add_worker_debt, get_outstanding_debt_total
+                debt_date = datetime.date.today().isoformat()
+                added, debt_id = add_worker_debt(
+                    worker_id=worker_id,
+                    debt_amount=float(debt_diff),
+                    debt_date=debt_date,
+                    reason=extra_salary_note or "Extra salary advance",
+                )
+                if added:
+                    updated_total_debt = get_outstanding_debt_total(worker_id)
+                    execute_query(
+                        "UPDATE salary_records SET remaining_debt_balance = %s WHERE id = %s",
+                        (float(updated_total_debt), record_id)
+                    )
+                    get_db().commit()
+
         log_action("SALARY_RECORD_UPDATED", f"ID {record_id} total={total:.2f}")
         return True, "Record updated successfully"
     except Exception as e:

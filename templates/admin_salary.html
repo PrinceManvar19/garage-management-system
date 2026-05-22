@@ -210,6 +210,25 @@
                 </div>
                 <div class="earning-amount" id="debtOutstanding">&#8377;0.00</div>
               </div>
+
+              <div class="earning-row" style="border-top:1px solid #f0f0f3;">
+                <div class="earning-icon" style="color:#0f766e; background:#f0fdfa;">
+                  <i class="fas fa-arrow-trend-up"></i>
+                </div>
+                <div>
+                  <div class="earning-title">Extra Salary</div>
+                  <div class="earning-sub">Given above earned amount — will be auto-logged as a loan to recover next month if needed</div>
+                  <div style="margin-top:0.7rem;">
+                    <label class="salary-label" for="extra_salary_amount">Extra Amount (₹)</label>
+                    <input type="number" class="salary-input" id="extra_salary_amount" name="extra_salary_amount" min="0" step="1" value="0" placeholder="0">
+                  </div>
+                  <div style="margin-top:0.4rem;">
+                    <label class="salary-label" for="extra_salary_note">Reason (optional)</label>
+                    <input type="text" class="salary-input" id="extra_salary_note" name="extra_salary_note" placeholder="e.g. Festival need, emergency">
+                  </div>
+                </div>
+                <div class="earning-amount" id="extraSalaryAmount" style="color:#0f766e;">&#8377;0.00</div>
+              </div>
             </div>
           </div>
         </section>
@@ -223,6 +242,7 @@
         <div class="summary-body">
           <div class="summary-row"><span>Attendance</span><strong id="summaryAttendance">0 / 0</strong></div>
           <div class="summary-row"><span>Base Salary</span><strong id="summaryBase">&#8377;0.00</strong></div>
+          <div class="summary-row" style="color:#0f766e;"><span>Extra Salary (loan)</span><strong id="summaryExtra" style="color:#0f766e;">+&#8377;0.00</strong></div>
           <div class="summary-row"><span>Monthly Advance Deducted</span><strong id="summaryPocket">-&#8377;0.00</strong></div>
           <div class="summary-row"><span>Pending Advance Recovered</span><strong id="summaryDebtRecovery">-&#8377;0.00</strong></div>
           <div class="summary-row"><span>Remaining Debt Balance</span><strong id="summaryDebtBalance">&#8377;0.00</strong></div>
@@ -295,7 +315,9 @@
       recoveryInput.value = debtRecovery.toFixed(2);
     }
     const remainingDebt = Math.max(outstandingDebt - debtRecovery, 0);
-    const total = Math.max(base - pocketMoneyTotal - debtRecovery, 0);
+    const extraInput = document.getElementById('extra_salary_amount');
+    const extraSalary = Math.max(parseFloat(extraInput?.value) || 0, 0);
+    const total = Math.max(base - pocketMoneyTotal - debtRecovery, 0) + extraSalary;
     const pct = totalDays > 0 ? Math.round(attendedDays / totalDays * 100) : 0;
 
     document.getElementById('wiPerDay').innerHTML = inr(perDay);
@@ -304,9 +326,11 @@
     document.getElementById('pocketAmount').innerHTML = inr(pocketMoneyTotal);
     document.getElementById('pocketSub').textContent = pocketMoneyCount + ' entr' + (pocketMoneyCount === 1 ? 'y' : 'ies') + ' auto deducted';
     document.getElementById('debtOutstanding').innerHTML = inr(outstandingDebt);
+    document.getElementById('extraSalaryAmount').innerHTML = inr(extraSalary);
     document.getElementById('totalAmount').textContent = Number(total).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     document.getElementById('summaryAttendance').textContent = attendedDays + ' / ' + totalDays;
     document.getElementById('summaryBase').innerHTML = inr(base);
+    document.getElementById('summaryExtra').innerHTML = '+' + inr(extraSalary);
     document.getElementById('summaryPocket').innerHTML = '-' + inr(pocketMoneyTotal);
     document.getElementById('summaryDebtRecovery').innerHTML = '-' + inr(debtRecovery);
     document.getElementById('summaryDebtBalance').innerHTML = inr(remainingDebt);
@@ -394,7 +418,7 @@
     document.getElementById(id).addEventListener('change', updatePeriodDays);
   });
 
-  ['worker_id','total_days','attended_days','debt_recovery_amount'].forEach(function(id) {
+  ['worker_id','total_days','attended_days','debt_recovery_amount','extra_salary_amount'].forEach(function(id) {
     document.getElementById(id).addEventListener(
       id === 'worker_id' ? 'change' : 'input',
       id === 'worker_id' ? loadWorker : recalculate

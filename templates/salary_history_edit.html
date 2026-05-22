@@ -214,46 +214,17 @@
 
         <div class="card" style="margin-bottom:1.25rem;">
           <div class="card-header">
-            <h3><i class="fas fa-chart-bar"></i> Earnings &amp; Allowances</h3>
-            <div class="muted">Optional secondary additions</div>
+            <h3><i class="fas fa-circle-dollar-to-slot"></i> Extra Salary</h3>
+            <div class="muted">Optional extra amount paid now and logged as debt</div>
           </div>
           <div class="card-body">
-            <div class="grid-3">
-              <div class="field">
-                <label class="label">Bonus</label>
-                <div class="toggle-money" role="group" aria-label="Bonus type">
-                  <input type="radio" name="bonus_type" id="bonus_pct" value="pct">
-                  <label for="bonus_pct"><i class="fas fa-percent"></i> %</label>
-                  <input type="radio" name="bonus_type" id="bonus_amt" value="amt" checked>
-                  <label for="bonus_amt"><i class="fas fa-indian-rupee-sign"></i> ₹</label>
-                </div>
-                <div style="height:0.6rem"></div>
-                <input class="input" type="number" step="0.01" id="bonus_value" name="bonus_value" min="0" value="{{ record.bonus|float }}" placeholder="0.00">
-              </div>
-
-              <div class="field">
-                <label class="label">Overtime</label>
-                <div class="toggle-money" role="group" aria-label="OT type">
-                  <input type="radio" name="ot_type" id="ot_pct" value="pct">
-                  <label for="ot_pct"><i class="fas fa-percent"></i> %</label>
-                  <input type="radio" name="ot_type" id="ot_amt" value="amt" checked>
-                  <label for="ot_amt"><i class="fas fa-indian-rupee-sign"></i> ₹</label>
-                </div>
-                <div style="height:0.6rem"></div>
-                <input class="input" type="number" step="0.01" id="ot_value" name="ot_value" min="0" value="{{ record.overtime|float }}" placeholder="0.00">
-              </div>
-
-              <div class="field">
-                <label class="label">Commission</label>
-                <div class="toggle-money" role="group" aria-label="Commission type">
-                  <input type="radio" name="comm_type" id="comm_pct" value="pct">
-                  <label for="comm_pct"><i class="fas fa-percent"></i> %</label>
-                  <input type="radio" name="comm_type" id="comm_amt" value="amt" checked>
-                  <label for="comm_amt"><i class="fas fa-indian-rupee-sign"></i> ₹</label>
-                </div>
-                <div style="height:0.6rem"></div>
-                <input class="input" type="number" step="0.01" id="comm_value" name="comm_value" min="0" value="{{ record.commission|float }}" placeholder="0.00">
-              </div>
+            <div class="field">
+              <label class="label" for="extra_salary_amount">Extra Salary Amount</label>
+              <input class="input" type="number" step="0.01" id="extra_salary_amount" name="extra_salary_amount" min="0" value="{{ record.extra_salary|default(0)|float }}" placeholder="0.00">
+            </div>
+            <div class="field">
+              <label class="label" for="extra_salary_note">Reason / Note (optional)</label>
+              <input class="input" type="text" id="extra_salary_note" name="extra_salary_note" value="{{ record.extra_salary_note or '' }}" placeholder="e.g. Emergency advance">
             </div>
           </div>
         </div>
@@ -299,6 +270,10 @@
               <div class="stat-value" id="uiSummaryAdvance">₹0.00</div>
             </div>
             <div class="stat">
+              <div class="stat-label">Extra Salary Advance</div>
+              <div class="stat-value" id="uiSummaryExtra">₹0.00</div>
+            </div>
+            <div class="stat">
               <div class="stat-label">Remaining Debt Balance</div>
               <div class="stat-value" id="uiSummaryRemainingDebt">₹0.00</div>
             </div>
@@ -317,6 +292,7 @@
             <div style="display:flex; justify-content:space-between; align-items:center; padding:0.55rem 0; border-bottom:1px solid #f0f0f5;"><span class="muted" style="font-size:0.86rem; font-weight:800;">Bonus</span><strong id="uiBonus">₹0.00</strong></div>
             <div style="display:flex; justify-content:space-between; align-items:center; padding:0.55rem 0; border-bottom:1px solid #f0f0f5;"><span class="muted" style="font-size:0.86rem; font-weight:800;">Overtime</span><strong id="uiOT">₹0.00</strong></div>
             <div style="display:flex; justify-content:space-between; align-items:center; padding:0.55rem 0; border-bottom:1px solid #f0f0f5;"><span class="muted" style="font-size:0.86rem; font-weight:800;">Commission</span><strong id="uiComm">₹0.00</strong></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:0.55rem 0; border-bottom:1px solid #f0f0f5;"><span class="muted" style="font-size:0.86rem; font-weight:800;">Extra Salary</span><strong id="uiExtraSalary">₹0.00</strong></div>
 
             <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem 0 0; border-top:2px solid #e8e8ec; margin-top:0.3rem;">
               <span style="font-weight:900; font-size:0.9rem;">Total Earnings</span>
@@ -411,9 +387,10 @@
       debtRecovery = previousPendingDebt;
       if (recoveryInput) recoveryInput.value = debtRecovery.toFixed(2);
     }
+    const extraSalary = Math.max(parseFloat(document.getElementById('extra_salary_amount')?.value) || 0, 0);
     const remainingDebt = Math.max(previousPendingDebt - debtRecovery, 0);
     const deductions = monthlyAdvance + debtRecovery;
-    const finalPayable = Math.max(allowances.totalEarnings - deductions, 0);
+    const finalPayable = Math.max(allowances.totalEarnings - deductions, 0) + extraSalary;
 
     // UI updates
     document.getElementById('uiPerDay').textContent = formatINR(perDay);
@@ -425,12 +402,14 @@
     document.getElementById('uiBonus').textContent = formatINR(allowances.bonusAmt);
     document.getElementById('uiOT').textContent = formatINR(allowances.otAmt);
     document.getElementById('uiComm').textContent = formatINR(allowances.commAmt);
+    document.getElementById('uiExtraSalary').textContent = formatINR(extraSalary);
 
     document.getElementById('uiTotalEarnings').textContent = formatINR(allowances.totalEarnings);
     document.getElementById('uiTotalDeductions').textContent = formatINR(deductions);
     document.getElementById('uiFinalPayable').textContent = formatINR(finalPayable);
     document.getElementById('uiRemainingDebtBox').textContent = formatINR(remainingDebt);
     document.getElementById('uiSummaryAdvance').textContent = formatINR(monthlyAdvance);
+    document.getElementById('uiSummaryExtra').textContent = formatINR(extraSalary);
     document.getElementById('uiSummaryRemainingDebt').textContent = formatINR(remainingDebt);
 
     // summary secure money
@@ -458,7 +437,7 @@
     }
 
     // Inputs
-    ['total_days','attended_days','bonus_value','ot_value','comm_value','debt_recovery_amount'].forEach(id => {
+    ['total_days','attended_days','bonus_value','ot_value','comm_value','debt_recovery_amount','extra_salary_amount'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.addEventListener('input', recalculate);
     });

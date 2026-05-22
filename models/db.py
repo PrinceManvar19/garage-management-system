@@ -179,6 +179,7 @@ def init_db():
                 monthly_advance_entry_count INTEGER DEFAULT 0,
                 previous_pending_debt REAL DEFAULT 0,
                 debt_recovery_deduction REAL DEFAULT 0,
+                extra_salary REAL DEFAULT 0,
                 remaining_debt_balance REAL DEFAULT 0,
                 final_payable_salary REAL DEFAULT 0,
                 net_salary REAL DEFAULT 0,

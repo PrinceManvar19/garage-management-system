@@ -108,6 +108,14 @@ def salary_calculator():
             flash("Invalid debt recovery amount", "error")
             return redirect(url_for("salary.salary_calculator"))
 
+        try:
+            extra_salary_amount = float(request.form.get("extra_salary_amount") or 0)
+            extra_salary_amount = max(extra_salary_amount, 0)
+        except ValueError:
+            extra_salary_amount = 0
+
+        extra_salary_note = request.form.get("extra_salary_note", "").strip() or "Extra salary advance"
+
         month = request.form.get("month", "").strip()
         year = request.form.get("year", "").strip()
         year = int(year) if year.isdigit() else None
@@ -126,6 +134,8 @@ def salary_calculator():
             year=year,
             salary_status=salary_status,
             debt_recovery_amount=debt_recovery_amount,
+            extra_salary_amount=extra_salary_amount,
+            extra_salary_note=extra_salary_note,
         )
 
         if success:
@@ -301,6 +311,7 @@ def edit_salary_record(record_id):
         ot_val = float(request.form.get("ot_value") or 0)
         comm_val = float(request.form.get("comm_value") or 0)
         debt_recovery_amount = float(request.form.get("debt_recovery_amount") or 0)
+        extra_salary_amount = float(request.form.get("extra_salary_amount") or 0)
     except ValueError:
         flash("Invalid numeric value", "error")
         return redirect(url_for("salary.salary_history"))
@@ -309,6 +320,7 @@ def edit_salary_record(record_id):
     ot_pct = request.form.get("ot_type") == "pct"
     comm_pct = request.form.get("comm_type") == "pct"
     salary_status = request.form.get("salary_status", "finalized").strip()
+    extra_salary_note = request.form.get("extra_salary_note", "").strip() or "Extra salary advance"
     
     success, message = update_salary_record(
         record_id,
@@ -320,8 +332,10 @@ def edit_salary_record(record_id):
         ot_pct=ot_pct,
         comm_val=comm_val,
         comm_pct=comm_pct,
-        salary_status=salary_status,
         debt_recovery_amount=debt_recovery_amount,
+        extra_salary_amount=max(extra_salary_amount, 0),
+        extra_salary_note=extra_salary_note,
+        salary_status=salary_status,
     )
     if success:
         flash(message, "success")

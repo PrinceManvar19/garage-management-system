@@ -2,11 +2,26 @@ from models.db import get_db, query_dict, query_dict_one, execute_query
 from utils.helpers import normalize_phone, log_action
 
 
+SCHEMA_LOCK_KEY = 4194304
+
+
 def _ensure_worker_status_column():
     db = get_db()
     cursor = db.cursor()
 
     try:
+        cursor.execute("SELECT pg_try_advisory_lock(%s)", (SCHEMA_LOCK_KEY,))
+        locked = cursor.fetchone()[0]
+        if not locked:
+            cursor.execute("SELECT pg_advisory_lock(%s)", (SCHEMA_LOCK_KEY,))
+
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'workers' AND column_name = 'worker_status'
+        """)
+        if cursor.fetchone():
+            return
+
         cursor.execute("""
             ALTER TABLE workers
             ADD COLUMN IF NOT EXISTS worker_status TEXT DEFAULT 'active'
@@ -23,6 +38,10 @@ def _ensure_worker_status_column():
         raise
 
     finally:
+        try:
+            cursor.execute("SELECT pg_advisory_unlock(%s)", (SCHEMA_LOCK_KEY,))
+        except Exception:
+            pass
         cursor.close()
 
 
