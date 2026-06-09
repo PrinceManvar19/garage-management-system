@@ -38,7 +38,7 @@ def get_db():
                 "Variables for the web service."
             )
 
-        connection = psycopg2.connect(database_url)
+        connection = psycopg2.connect(database_url, connect_timeout=10)
         g.db = connection
 
     return g.db
@@ -109,159 +109,238 @@ def execute_query(sql, params=None):
         cursor.close()
 
 
+def _create_tables(cursor, db):
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS customers (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            phone TEXT,
+            vehicle TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS admins (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            phone TEXT
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS bookings (
+            booking_id TEXT PRIMARY KEY,
+            customer_id TEXT,
+            name TEXT NOT NULL,
+            phone TEXT,
+            vehicle TEXT NOT NULL,
+            brand_model TEXT,
+            service TEXT NOT NULL,
+            date TEXT NOT NULL,
+            status TEXT NOT NULL,
+            created_at TEXT,
+            checked_in_at TEXT,
+            completed_at TEXT,
+            actual_visit_date TEXT,
+            is_rescheduled INTEGER NOT NULL DEFAULT 0,
+            whatsapp_sent INTEGER NOT NULL DEFAULT 0,
+            msg_approved_sent INTEGER NOT NULL DEFAULT 0,
+            msg_rejected_sent INTEGER NOT NULL DEFAULT 0,
+            msg_checkedin_sent INTEGER NOT NULL DEFAULT 0,
+            msg_completed_sent INTEGER NOT NULL DEFAULT 0,
+            source TEXT DEFAULT 'customer_portal'
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS slots (
+            date TEXT PRIMARY KEY,
+            total INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            id SERIAL PRIMARY KEY,
+            booking_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            performed_by TEXT,
+            performed_by_id TEXT,
+            details TEXT DEFAULT '{}',
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS workers (
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            phone TEXT,
+            monthly_salary REAL,
+            worker_status TEXT DEFAULT 'active'
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS salary_records (
+            id SERIAL PRIMARY KEY,
+            worker_id TEXT,
+            month TEXT,
+            year INTEGER,
+            total_days INTEGER,
+            attended_days REAL,
+            per_day_salary REAL,
+            base_salary REAL,
+            bonus REAL,
+            overtime REAL,
+            commission REAL,
+            gross_salary REAL DEFAULT 0,
+            pocket_money_deduction REAL DEFAULT 0,
+            monthly_advance_entry_count INTEGER DEFAULT 0,
+            previous_pending_debt REAL DEFAULT 0,
+            debt_recovery_deduction REAL DEFAULT 0,
+            extra_salary REAL DEFAULT 0,
+            remaining_debt_balance REAL DEFAULT 0,
+            final_payable_salary REAL DEFAULT 0,
+            net_salary REAL DEFAULT 0,
+            total_salary REAL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (worker_id) REFERENCES workers(id),
+            UNIQUE(worker_id, month, year)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS vehicles (
+            plate_number TEXT PRIMARY KEY,
+            customer_id TEXT NOT NULL,
+            brand TEXT DEFAULT '',
+            model TEXT DEFAULT '',
+            FOREIGN KEY (customer_id) REFERENCES customers(id)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS customer_vehicles (
+            id SERIAL PRIMARY KEY,
+            customer_id TEXT NOT NULL,
+            number_plate TEXT NOT NULL,
+            brand_model TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+            UNIQUE (number_plate)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS pocket_money_entries (
+            id SERIAL PRIMARY KEY,
+            worker_id TEXT NOT NULL,
+            amount NUMERIC(10,2) NOT NULL,
+            entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+            note TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (worker_id) REFERENCES workers(id)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS worker_debts (
+            id SERIAL PRIMARY KEY,
+            worker_id TEXT NOT NULL,
+            debt_amount NUMERIC(10,2) NOT NULL,
+            debt_date DATE NOT NULL DEFAULT CURRENT_DATE,
+            reason TEXT,
+            remaining_balance NUMERIC(10,2) NOT NULL,
+            status TEXT NOT NULL DEFAULT 'open',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (worker_id) REFERENCES workers(id)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS debt_recoveries (
+            id SERIAL PRIMARY KEY,
+            debt_id INTEGER NOT NULL,
+            worker_id TEXT NOT NULL,
+            salary_record_id INTEGER,
+            recovery_amount NUMERIC(10,2) NOT NULL,
+            recovery_date DATE NOT NULL DEFAULT CURRENT_DATE,
+            note TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (debt_id) REFERENCES worker_debts(id),
+            FOREIGN KEY (worker_id) REFERENCES workers(id),
+            FOREIGN KEY (salary_record_id) REFERENCES salary_records(id)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_workers_phone_unique
+        ON workers(phone)
+        WHERE phone IS NOT NULL AND phone <> ''
+    """)
+
+    cursor.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_phone_unique
+        ON customers(phone)
+        WHERE phone IS NOT NULL AND phone <> ''
+    """)
+
+    db.commit()
+
+def _migrations_already_done(cursor, db):
+    """Returns True if all one-time migrations have already run."""
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS _migration_log (
+            key TEXT PRIMARY KEY,
+            ran_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("SELECT key FROM _migration_log WHERE key = 'v1_complete'")
+    if cursor.fetchone() is not None:
+        return True
+
+    # Existing production databases may already be fully migrated before this
+    # guard table existed. If the imported customer data is already present,
+    # mark the one-time migrations complete to avoid startup-time full scans.
+    cursor.execute("SELECT 1 FROM customer_vehicles LIMIT 1")
+    if cursor.fetchone() is not None:
+        _mark_migrations_done(cursor, db)
+        return True
+
+    return False
+
+
+def _mark_migrations_done(cursor, db):
+    cursor.execute("""
+        INSERT INTO _migration_log (key) VALUES ('v1_complete')
+        ON CONFLICT (key) DO NOTHING
+    """)
+    db.commit()
+
+
 def init_db():
     db = get_db()
 
     cursor = db.cursor(cursor_factory=RealDictCursor)
 
     try:
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS customers (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                phone TEXT,
-                vehicle TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+        _create_tables(cursor, db)
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS admins (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                phone TEXT
-            )
-        """)
+        if not _migrations_already_done(cursor, db):
+            migrate_workers_table(cursor, db)
+            migrate_customers_table(cursor, db)
+            migrate_bookings_table(cursor, db)
+            migrate_salary_table(cursor, db)
+            migrate_service_reminders(cursor, db)
+            migrate_advance_tables(cursor, db)
+            migrate_json_data(cursor, db)
+            migrate_vehicles(cursor, db)
+            migrate_customer_vehicles(cursor, db)
+            _mark_migrations_done(cursor, db)
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS bookings (
-                booking_id TEXT PRIMARY KEY,
-                customer_id TEXT,
-                name TEXT NOT NULL,
-                phone TEXT,
-                vehicle TEXT NOT NULL,
-                brand_model TEXT,
-                service TEXT NOT NULL,
-                date TEXT NOT NULL,
-                status TEXT NOT NULL,
-                created_at TEXT,
-                checked_in_at TEXT,
-                completed_at TEXT,
-                actual_visit_date TEXT,
-                is_rescheduled INTEGER NOT NULL DEFAULT 0,
-                whatsapp_sent INTEGER NOT NULL DEFAULT 0,
-                msg_approved_sent INTEGER NOT NULL DEFAULT 0,
-                msg_rejected_sent INTEGER NOT NULL DEFAULT 0,
-                msg_checkedin_sent INTEGER NOT NULL DEFAULT 0,
-                msg_completed_sent INTEGER NOT NULL DEFAULT 0,
-                source TEXT DEFAULT 'customer_portal'
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS slots (
-                date TEXT PRIMARY KEY,
-                total INTEGER NOT NULL DEFAULT 0
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS audit_logs (
-                id SERIAL PRIMARY KEY,
-                booking_id TEXT NOT NULL,
-                action TEXT NOT NULL,
-                performed_by TEXT,
-                performed_by_id TEXT,
-                details TEXT DEFAULT '{}',
-                created_at TEXT NOT NULL
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS workers (
-                id TEXT PRIMARY KEY,
-                name TEXT,
-                phone TEXT,
-                monthly_salary REAL,
-                worker_status TEXT DEFAULT 'active'
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS salary_records (
-                id SERIAL PRIMARY KEY,
-                worker_id TEXT,
-                month TEXT,
-                year INTEGER,
-                total_days INTEGER,
-                attended_days REAL,
-                per_day_salary REAL,
-                base_salary REAL,
-                bonus REAL,
-                overtime REAL,
-                commission REAL,
-                gross_salary REAL DEFAULT 0,
-                pocket_money_deduction REAL DEFAULT 0,
-                monthly_advance_entry_count INTEGER DEFAULT 0,
-                previous_pending_debt REAL DEFAULT 0,
-                debt_recovery_deduction REAL DEFAULT 0,
-                extra_salary REAL DEFAULT 0,
-                remaining_debt_balance REAL DEFAULT 0,
-                final_payable_salary REAL DEFAULT 0,
-                net_salary REAL DEFAULT 0,
-                total_salary REAL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (worker_id) REFERENCES workers(id),
-                UNIQUE(worker_id, month, year)
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS vehicles (
-                plate_number TEXT PRIMARY KEY,
-                customer_id TEXT NOT NULL,
-                brand TEXT DEFAULT '',
-                model TEXT DEFAULT '',
-                FOREIGN KEY (customer_id) REFERENCES customers(id)
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS customer_vehicles (
-                id SERIAL PRIMARY KEY,
-                customer_id TEXT NOT NULL,
-                number_plate TEXT NOT NULL,
-                brand_model TEXT DEFAULT '',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
-                UNIQUE (number_plate)
-            )
-        """)
-
-        cursor.execute("""
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_workers_phone_unique
-            ON workers(phone)
-            WHERE phone IS NOT NULL AND phone <> ''
-        """)
-
-        cursor.execute("""
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_phone_unique
-            ON customers(phone)
-            WHERE phone IS NOT NULL AND phone <> ''
-        """)
-
-        db.commit()
-
-        migrate_workers_table(cursor, db)
-        migrate_customers_table(cursor, db)
-        migrate_bookings_table(cursor, db)
-        migrate_salary_table(cursor, db)
-        migrate_service_reminders(cursor, db)
-        migrate_advance_tables(cursor, db)
         seed_admins(cursor, db)
-        migrate_json_data(cursor, db)
-        migrate_vehicles(cursor, db)
-        migrate_customer_vehicles(cursor, db)
 
     except psycopg2.Error as e:
         db.rollback()
