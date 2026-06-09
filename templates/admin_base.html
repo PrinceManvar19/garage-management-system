@@ -43,6 +43,7 @@
       min-height: 82px;
       padding: 1rem;
       border-bottom: 1px solid rgba(255,255,255,0.08);
+      flex-shrink: 0;
     }
 
     .admin-sidebar-brand img {
@@ -76,6 +77,28 @@
       gap: 0.35rem;
       padding: 1rem 0.7rem;
       flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.28) transparent;
+    }
+
+    .admin-sidebar-nav::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .admin-sidebar-nav::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .admin-sidebar-nav::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.24);
+      border-radius: 999px;
+    }
+
+    .admin-sidebar-nav::-webkit-scrollbar-thumb:hover {
+      background: rgba(255,255,255,0.36);
     }
 
     .admin-sidebar-link {
@@ -104,6 +127,7 @@
       margin: 0.7rem;
       border: 1px solid rgba(239, 68, 68, 0.35);
       color: #fecaca;
+      flex-shrink: 0;
     }
 
     .admin-sidebar-logout:hover {
@@ -145,6 +169,7 @@
       .admin-sidebar-nav {
         flex-direction: row;
         overflow-x: auto;
+        overflow-y: hidden;
       }
 
       .admin-sidebar-link {

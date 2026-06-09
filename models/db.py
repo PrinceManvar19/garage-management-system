@@ -96,7 +96,8 @@ def init_db():
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 phone TEXT,
-                vehicle TEXT
+                vehicle TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
 
@@ -128,7 +129,8 @@ def init_db():
                 msg_approved_sent INTEGER NOT NULL DEFAULT 0,
                 msg_rejected_sent INTEGER NOT NULL DEFAULT 0,
                 msg_checkedin_sent INTEGER NOT NULL DEFAULT 0,
-                msg_completed_sent INTEGER NOT NULL DEFAULT 0
+                msg_completed_sent INTEGER NOT NULL DEFAULT 0,
+                source TEXT DEFAULT 'customer_portal'
             )
         """)
 
@@ -201,6 +203,18 @@ def init_db():
         """)
 
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS customer_vehicles (
+                id SERIAL PRIMARY KEY,
+                customer_id TEXT NOT NULL,
+                number_plate TEXT NOT NULL,
+                brand_model TEXT DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+                UNIQUE (number_plate)
+            )
+        """)
+
+        cursor.execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS idx_workers_phone_unique
             ON workers(phone)
             WHERE phone IS NOT NULL AND phone <> ''
@@ -215,6 +229,7 @@ def init_db():
         db.commit()
 
         migrate_workers_table(cursor, db)
+        migrate_customers_table(cursor, db)
         migrate_bookings_table(cursor, db)
         migrate_salary_table(cursor, db)
         migrate_service_reminders(cursor, db)
@@ -222,6 +237,7 @@ def init_db():
         seed_admins(cursor, db)
         migrate_json_data(cursor, db)
         migrate_vehicles(cursor, db)
+        migrate_customer_vehicles(cursor, db)
 
     except psycopg2.Error as e:
         db.rollback()
@@ -404,6 +420,17 @@ def migrate_bookings_table(cursor, db):
                 f"ALTER TABLE bookings ADD COLUMN {col} INTEGER NOT NULL DEFAULT 0"
             )
 
+    if "source" not in existing_columns:
+        cursor.execute("ALTER TABLE bookings ADD COLUMN source TEXT DEFAULT 'customer_portal'")
+
+    db.commit()
+
+
+def migrate_customers_table(cursor, db):
+    cursor.execute("""
+        ALTER TABLE customers
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    """)
     db.commit()
 
 
@@ -550,6 +577,42 @@ def migrate_vehicles(cursor, db):
             '',
             ''
         ))
+
+    db.commit()
+
+
+def migrate_customer_vehicles(cursor, db):
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS customer_vehicles (
+            id SERIAL PRIMARY KEY,
+            customer_id TEXT NOT NULL,
+            number_plate TEXT NOT NULL,
+            brand_model TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+            UNIQUE (number_plate)
+        )
+    """)
+
+    cursor.execute("""
+        INSERT INTO customer_vehicles (customer_id, number_plate, brand_model)
+        SELECT v.customer_id,
+               UPPER(REGEXP_REPLACE(v.plate_number, '[^A-Za-z0-9]', '', 'g')),
+               TRIM(CONCAT(COALESCE(NULLIF(v.brand, ''), ''), ' ', COALESCE(NULLIF(v.model, ''), '')))
+        FROM vehicles v
+        WHERE v.plate_number IS NOT NULL AND TRIM(v.plate_number) <> ''
+        ON CONFLICT (number_plate) DO NOTHING
+    """)
+
+    cursor.execute("""
+        INSERT INTO customer_vehicles (customer_id, number_plate, brand_model)
+        SELECT c.id,
+               UPPER(REGEXP_REPLACE(c.vehicle, '[^A-Za-z0-9]', '', 'g')),
+               ''
+        FROM customers c
+        WHERE c.vehicle IS NOT NULL AND TRIM(c.vehicle) <> ''
+        ON CONFLICT (number_plate) DO NOTHING
+    """)
 
     db.commit()
 

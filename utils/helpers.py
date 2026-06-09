@@ -11,11 +11,21 @@ from utils.constants import (
 
 
 def normalize_phone(phone):
+    if isinstance(phone, (int, float)):
+        phone = str(int(phone))
     normalized = (phone or "").strip().replace("+91", "")
     normalized = re.sub(r"\D", "", normalized)
     if len(normalized) > 10 and normalized.startswith("91"):
         normalized = normalized[-10:]
     return normalized
+
+
+def normalize_number_plate(plate):
+    return re.sub(r"[^A-Z0-9]", "", (plate or "").strip().upper())
+
+
+def is_valid_indian_number_plate(plate):
+    return bool(re.fullmatch(r"^[A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4}$", normalize_number_plate(plate)))
 
 
 def get_status_display(status):

@@ -29,7 +29,9 @@ from utils.helpers import (
     format_date_display,
     format_datetime_display,
     get_status_display,
+    is_valid_indian_number_plate,
     log_action,
+    normalize_number_plate,
     normalize_phone,
     parse_datetime,
     sort_bookings_newest_first,
@@ -42,7 +44,7 @@ PHONE_PATTERN = re.compile(r"^\d{10}$")
 def _normalize_booking_data(name, phone, vehicle, brand_model, service, date):
     normalized_name = (name or "").strip()
     normalized_phone = normalize_phone(phone)
-    normalized_vehicle = (vehicle or "").strip().upper()
+    normalized_vehicle = normalize_number_plate(vehicle)
     normalized_brand_model = (brand_model or "").strip()
     normalized_service = (service or "").strip()
     normalized_date = (date or "").strip()
@@ -165,7 +167,7 @@ def _begin_write_transaction():
 def _validate_booking_input(customer_id, phone, vehicle, service, date):
     normalized_customer_id = (customer_id or "").strip().upper()
     normalized_phone = normalize_phone(phone)
-    normalized_vehicle = (vehicle or "").strip().upper()
+    normalized_vehicle = normalize_number_plate(vehicle)
     normalized_service = (service or "").strip()
     normalized_date = (date or "").strip()
 
@@ -181,8 +183,8 @@ def _validate_booking_input(customer_id, phone, vehicle, service, date):
     if not normalized_vehicle:
         return False, "Vehicle number is required."
 
-    if not re.fullmatch(r"^[A-Z0-9\s-]{4,15}$", normalized_vehicle):
-        return False, "Invalid vehicle number format."
+    if not is_valid_indian_number_plate(normalized_vehicle):
+        return False, "Invalid Indian vehicle number format."
 
     if not normalized_service:
         return False, "Service is required."
@@ -207,6 +209,7 @@ def create_booking_for_customer(
     service,
     date,
     performed_by=None,
+    source="customer_portal",
 ):
     normalized_name, normalized_phone, normalized_vehicle, normalized_brand_model, normalized_service, normalized_date = _normalize_booking_data(
         name, phone, vehicle, brand_model, service, date
@@ -296,6 +299,7 @@ def create_booking_for_customer(
         "msg_rejected_sent": 0,
         "msg_checkedin_sent": 0,
         "msg_completed_sent": 0,
+        "source": source,
     }
 
     try:
@@ -327,7 +331,7 @@ def create_booking_for_customer(
                     "vehicle": booking["vehicle"],
                     "service": booking["service"],
                     "date": booking["date"],
-                    "source": "customer_portal",
+                    "source": source,
                 },
             )
 
@@ -532,4 +536,5 @@ def create_manual_booking_with_customer(
         service,
         date,
         performed_by,
+        source="manual",
     )
