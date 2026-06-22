@@ -1,0 +1,113 @@
+{% extends "web_admin_base.html" %}
+{% block title %}Dashboard - Shreeji Admin{% endblock %}
+
+{% block content %}
+<h1 class="web-admin-page-title"><i class="fa-solid fa-gauge"></i> Dashboard</h1>
+
+<div class="row g-3 mb-3">
+  {% for label, value in [
+    ('Total Bookings', stats.total or 0),
+    ('Pending', stats.pending or 0),
+    ('Approved', stats.approved or 0),
+    ('Checked In', stats.checked_in or 0),
+    ('Completed', stats.completed or 0)
+  ] %}
+    <div class="col-6 col-lg">
+      <div class="web-admin-card web-admin-stat h-100">
+        <div class="web-admin-stat-number">{{ value }}</div>
+        <div class="web-admin-muted">{{ label }}</div>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+
+<div class="web-admin-card">
+  <h2>Vehicles in Garage</h2>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle web-admin-table">
+      <thead>
+        <tr>
+          <th>Booking ID</th>
+          <th>Customer</th>
+          <th>Vehicle</th>
+          <th>Service</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in vehicles_in_garage %}
+          <tr>
+            <td><strong>{{ b.booking_id }}</strong></td>
+            <td>{{ b.name }}</td>
+            <td>{{ b.vehicle }}</td>
+            <td>{{ b.service }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4" class="text-muted">No vehicles checked in right now.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="web-admin-card">
+  <h2>Today's Appointments <span class="web-admin-muted">({{ today_display or today }})</span></h2>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle web-admin-table">
+      <thead>
+        <tr>
+          <th>Booking ID</th>
+          <th>Name</th>
+          <th>Vehicle</th>
+          <th>Time Slot</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in today_appointments %}
+          <tr>
+            <td><strong>{{ b.booking_id }}</strong></td>
+            <td>{{ b.name }}</td>
+            <td>{{ b.vehicle }}</td>
+            <td>{{ b.slot_label or b.formatted_date or b.date }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4" class="text-muted">No approved appointments for today.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="web-admin-card">
+  <h2>Late Arrivals</h2>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle web-admin-table">
+      <thead>
+        <tr>
+          <th>Booking ID</th>
+          <th>Name</th>
+          <th>Vehicle</th>
+          <th>Original Date</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in late_arrival_bookings %}
+          <tr>
+            <td><strong>{{ b.booking_id }}</strong></td>
+            <td>{{ b.name }}</td>
+            <td>{{ b.vehicle }}</td>
+            <td>{{ b.formatted_date or b.date }}</td>
+            <td>
+              <form method="POST" action="{{ url_for('web_admin.web_admin_checkin_booking', booking_id=b.booking_id) }}">
+                <button class="btn btn-sm btn-primary" type="submit">Check In Today</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="text-muted">No late arrivals waiting.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

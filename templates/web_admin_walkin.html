@@ -1,0 +1,178 @@
+{% extends "web_admin_base.html" %}
+{% block title %}Walk-in Entry - Shreeji Admin{% endblock %}
+
+{% block content %}
+<h1 class="web-admin-page-title"><i class="fa-solid fa-person-walking"></i> Walk-in Entry</h1>
+
+<div class="web-admin-card">
+  <form method="POST" action="{{ url_for('web_admin.web_admin_walkin') }}" id="webAdminWalkinForm">
+    <input type="hidden" name="customer_id" id="customerIdInput" />
+    <input type="hidden" name="vehicle_brand" id="vehicleBrandInput" />
+    <input type="hidden" name="vehicle_model" id="vehicleModelInput" />
+
+    <div class="row g-3">
+      <div class="col-12 col-md-6">
+        <label class="form-label">Name</label>
+        <input type="text" class="form-control" name="name" id="nameInput" required />
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label">Phone</label>
+        <input type="text" class="form-control" name="phone" id="phoneInput" required />
+        <div class="form-text" id="customerLookupMessage">Customer lookup runs after phone entry.</div>
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label">Vehicle Number</label>
+        <input type="text" class="form-control" name="vehicle_number" id="vehicleInput" required />
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label">Brand</label>
+        <select class="form-select" id="brandSelect" required>
+          <option value="">Select Brand</option>
+          <option>Bajaj</option>
+          <option>Hero</option>
+          <option>Honda</option>
+          <option>Royal Enfield</option>
+          <option>TVS</option>
+          <option>Yamaha</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label">Model</label>
+        <input type="text" class="form-control" id="modelInput" />
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label">Service</label>
+        <select class="form-select" name="service" required>
+          <option value="">Select Service</option>
+          <option value="Full Service">Full Service</option>
+          <option value="Engine Work">Engine Work</option>
+          <option value="Washing">Washing</option>
+        </select>
+      </div>
+      <div class="col-12">
+        <label class="form-label d-flex align-items-center gap-2">
+          <input type="checkbox" name="no_slot_walkin" id="noSlotInput" checked />
+          No Slot / Direct Walk-in
+        </label>
+      </div>
+      <div class="col-12 col-md-6" id="slotGroup" hidden>
+        <label class="form-label">Slot</label>
+        <select class="form-select" name="slot_id" id="slotSelect">
+          <option value="">Select available slot</option>
+          {% for date, slot in slots|default({})|dictsort %}
+            {% if slot.available > 0 %}
+              <option value="{{ date }}">{{ slot.formatted_date or date }} - {{ slot.available }} available</option>
+            {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label">Date</label>
+        <input type="date" class="form-control" name="date" id="dateInput" value="{{ today }}" />
+      </div>
+      <div class="col-12">
+        <input type="hidden" name="brand_model" id="brandModelInput" />
+        <button type="submit" class="btn btn-danger">Add Walk-in</button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  const phoneInput = document.getElementById('phoneInput');
+  const nameInput = document.getElementById('nameInput');
+  const vehicleInput = document.getElementById('vehicleInput');
+  const customerIdInput = document.getElementById('customerIdInput');
+  const brandSelect = document.getElementById('brandSelect');
+  const modelInput = document.getElementById('modelInput');
+  const vehicleBrandInput = document.getElementById('vehicleBrandInput');
+  const vehicleModelInput = document.getElementById('vehicleModelInput');
+  const brandModelInput = document.getElementById('brandModelInput');
+  const lookupMessage = document.getElementById('customerLookupMessage');
+  const noSlotInput = document.getElementById('noSlotInput');
+  const slotGroup = document.getElementById('slotGroup');
+  const slotSelect = document.getElementById('slotSelect');
+  const dateInput = document.getElementById('dateInput');
+  const form = document.getElementById('webAdminWalkinForm');
+
+  function normalizePhone(value) {
+    let digits = String(value || '').replace(/\D/g, '');
+    if (digits.length > 10 && digits.startsWith('91')) {
+      digits = digits.slice(2);
+    }
+    return digits.slice(0, 10);
+  }
+
+  async function lookupCustomer() {
+    const phone = normalizePhone(phoneInput.value);
+    phoneInput.value = phone;
+    if (phone.length !== 10) {
+      lookupMessage.textContent = 'Enter a 10 digit phone number.';
+      customerIdInput.value = '';
+      return;
+    }
+
+    lookupMessage.textContent = 'Looking up customer...';
+    try {
+      const response = await fetch('{{ url_for('web_admin.web_admin_find_customer') }}?phone=' + encodeURIComponent(phone));
+      const data = await response.json();
+      if (!response.ok || !data.found) {
+        customerIdInput.value = '';
+        lookupMessage.textContent = 'New customer will be created on submit.';
+        return;
+      }
+
+      customerIdInput.value = data.customer_id || '';
+      nameInput.value = data.name || nameInput.value;
+      vehicleInput.value = data.vehicle || vehicleInput.value;
+      lookupMessage.textContent = 'Existing customer found.';
+    } catch (error) {
+      lookupMessage.textContent = 'Customer lookup failed.';
+    }
+  }
+
+  function syncSlotMode() {
+    const directWalkin = noSlotInput.checked;
+    slotGroup.hidden = directWalkin;
+    slotSelect.disabled = directWalkin;
+    if (directWalkin) {
+      slotSelect.value = '';
+    }
+  }
+
+  form.addEventListener('submit', function(event) {
+    const brand = brandSelect.value.trim();
+    const model = modelInput.value.trim();
+    if (!brand) {
+      event.preventDefault();
+      brandSelect.focus();
+      return;
+    }
+
+    vehicleBrandInput.value = brand;
+    vehicleModelInput.value = model;
+    brandModelInput.value = [brand, model].filter(Boolean).join(' ');
+    vehicleInput.value = vehicleInput.value.trim().toUpperCase().replace(/\s+/g, '');
+
+    if (!noSlotInput.checked && !slotSelect.value) {
+      event.preventDefault();
+      slotSelect.focus();
+    }
+  });
+
+  phoneInput.addEventListener('blur', lookupCustomer);
+  phoneInput.addEventListener('input', function() {
+    phoneInput.value = normalizePhone(phoneInput.value);
+  });
+  noSlotInput.addEventListener('change', syncSlotMode);
+  slotSelect.addEventListener('change', function() {
+    if (slotSelect.value) {
+      dateInput.value = slotSelect.value;
+    }
+  });
+  syncSlotMode();
+</script>
+{% endblock %}

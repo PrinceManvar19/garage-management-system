@@ -1,0 +1,73 @@
+{% extends "web_admin_base.html" %}
+{% block title %}Booking Requests - Shreeji Admin{% endblock %}
+
+{% block content %}
+<h1 class="web-admin-page-title"><i class="fa-solid fa-clipboard-list"></i> Booking Requests</h1>
+
+<div class="web-admin-card">
+  <h2>Filters</h2>
+  <form method="GET" action="{{ url_for('web_admin.web_admin_bookings') }}" class="row g-3 align-items-end">
+    <div class="col-12 col-md-3">
+      <label class="form-label">Date</label>
+      <input type="date" class="form-control" name="date" value="{{ filters.date if filters else '' }}" />
+    </div>
+    <div class="col-12 col-md-3">
+      <label class="form-label">Status</label>
+      <select class="form-select" name="status">
+        <option value="">All</option>
+        {% for status in ['pending', 'approved', 'rejected', 'checked_in', 'completed'] %}
+          <option value="{{ status }}" {% if filters and filters.status == status %}selected{% endif %}>{{ status.replace('_', ' ').title() }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-12 col-md-4">
+      <label class="form-label">Search</label>
+      <input type="text" class="form-control" name="query" value="{{ filters.query if filters else '' }}" placeholder="Name, phone, vehicle, booking ID" />
+    </div>
+    <div class="col-12 col-md-2 d-flex gap-2">
+      <button type="submit" class="btn btn-danger flex-fill">Apply</button>
+      <a href="{{ url_for('web_admin.web_admin_bookings') }}" class="btn btn-outline-secondary">Reset</a>
+    </div>
+  </form>
+</div>
+
+<div class="web-admin-card">
+  <h2>Requests</h2>
+  <div class="row g-3">
+    {% for b in bookings %}
+      <div class="col-12 col-xl-6">
+        <div class="border rounded p-3 h-100">
+          <div class="d-flex justify-content-between align-items-start gap-3">
+            <div>
+              <strong>{{ b.booking_id }}</strong>
+              <div>{{ b.name }} | {{ b.phone or '-' }}</div>
+              <div class="web-admin-muted">{{ b.vehicle }} | {{ b.service }}</div>
+              <div class="web-admin-muted">{{ b.formatted_date or b.date }}</div>
+            </div>
+            <span class="status-badge status-{{ b.status }}">{{ b.status.replace('_', ' ') }}</span>
+          </div>
+
+          <div class="web-admin-actions mt-3">
+            {% if b.status == 'pending' %}
+              <a class="btn btn-sm btn-success" href="{{ url_for('web_admin.web_admin_approve_booking', booking_id=b.booking_id) }}">Approve</a>
+              <a class="btn btn-sm btn-outline-danger" href="{{ url_for('web_admin.web_admin_reject_booking', booking_id=b.booking_id) }}" onclick="return confirm('Reject this booking?')">Reject</a>
+            {% elif b.status == 'approved' %}
+              <form method="POST" action="{{ url_for('web_admin.web_admin_checkin_booking', booking_id=b.booking_id) }}">
+                <button type="submit" class="btn btn-sm btn-primary">Check-In</button>
+              </form>
+            {% elif b.status == 'checked_in' %}
+              <a class="btn btn-sm btn-warning" href="{{ url_for('web_admin.web_admin_complete_booking', booking_id=b.booking_id) }}" onclick="return confirm('Mark this service as complete?')">Complete</a>
+            {% else %}
+              <span class="web-admin-muted">No action available</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    {% else %}
+      <div class="col-12">
+        <p class="text-muted mb-0">No bookings found.</p>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

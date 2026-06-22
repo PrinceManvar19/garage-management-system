@@ -1,16 +1,14 @@
 import os
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify
+from flask import Flask, jsonify, redirect, request
 
 from db_neon import init_app as init_db_app
 from db_local import init_local_db
-from routes.admin_attendance_routes import att_bp
-from routes.admin_routes import admin_bp
-from routes.admin_salary_routes import salary_bp
 from routes.auth_routes import auth_bp
 from routes.customer_routes import customer_bp
 from routes.main_routes import main_bp
+from routes.web_admin_routes import web_admin_bp
 from services.auth_service import ensure_session_user
 
 
@@ -105,10 +103,7 @@ def create_app():
 
     app = Flask(__name__)
 
-    app.secret_key = os.environ.get(
-        "SECRET_KEY",
-        "shreeji-auto-key-2025",
-    )
+    app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", os.urandom(24).hex())
 
     app.config["UPLOAD_FOLDER"] = "static/uploads"
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
@@ -147,9 +142,15 @@ def create_app():
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(customer_bp)
-    app.register_blueprint(admin_bp)
-    app.register_blueprint(salary_bp)
-    app.register_blueprint(att_bp)
+    app.register_blueprint(web_admin_bp)
+
+    @app.route("/wadmin", defaults={"path": ""})
+    @app.route("/wadmin/<path:path>")
+    def legacy_web_admin_redirect(path):
+        target = "/admin" + (f"/{path}" if path else "")
+        if request.query_string:
+            target = f"{target}?{request.query_string.decode()}"
+        return redirect(target, code=308)
 
     @app.route("/health")
     def health_check():
@@ -158,6 +159,7 @@ def create_app():
             "environment": environment,
             "database_url_found": True,
             "local_db": "initialised",
+            "mode": "public_with_web_admin",
             "message": "Garage Management System Running",
         })
 

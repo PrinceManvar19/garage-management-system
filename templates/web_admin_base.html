@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Shreeji Admin{% endblock %}</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+
+  <style>
+    body {
+      background: #f7f7f7;
+      font-family: "DM Sans", sans-serif;
+    }
+
+    .web-admin-shell {
+      min-height: 100vh;
+    }
+
+    .web-admin-sidebar {
+      display: none;
+      position: fixed;
+      inset: 0 auto 0 0;
+      width: 220px;
+      background: #1a1a1a;
+      color: #fff;
+      z-index: 1000;
+      border-right: 1px solid rgba(162, 4, 5, 0.35);
+    }
+
+    .web-admin-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      min-height: 76px;
+      padding: 1rem;
+      color: #fff;
+      text-decoration: none;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .web-admin-brand img {
+      width: 44px;
+      height: 44px;
+      object-fit: contain;
+    }
+
+    .web-admin-brand span {
+      font-family: "Syne", sans-serif;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
+    .web-admin-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      padding: 1rem 0.7rem;
+    }
+
+    .web-admin-link {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0.72rem 0.8rem;
+      border-radius: 8px;
+      color: rgba(255, 255, 255, 0.74);
+      font-size: 0.94rem;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .web-admin-link:hover,
+    .web-admin-link.active {
+      background: rgba(162, 4, 5, 0.24);
+      color: #fff;
+    }
+
+    .web-admin-link.active {
+      box-shadow: inset 3px 0 0 #a20405;
+    }
+
+    .web-admin-mobilebar {
+      background: #1a1a1a;
+      border-bottom: 2px solid #a20405;
+    }
+
+    .web-admin-mobilebar .navbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      color: #fff;
+      font-family: "Syne", sans-serif;
+      font-weight: 800;
+    }
+
+    .web-admin-mobilebar img {
+      width: 38px;
+      height: 38px;
+      object-fit: contain;
+    }
+
+    .web-admin-mobilebar .navbar-toggler {
+      border-color: rgba(255, 255, 255, 0.35);
+    }
+
+    .web-admin-mobilebar .navbar-toggler-icon {
+      filter: invert(1);
+    }
+
+    .web-admin-main {
+      min-height: 100vh;
+      padding: 1.1rem 4% 2rem;
+    }
+
+    .web-admin-page-title {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      margin: 0 0 1rem;
+      color: #111827;
+      font-family: "Syne", sans-serif;
+      font-size: clamp(1.45rem, 4vw, 2rem);
+      font-weight: 800;
+    }
+
+    .web-admin-card {
+      margin-bottom: 1rem;
+      padding: 1rem;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+    }
+
+    .web-admin-card h2 {
+      margin: 0 0 0.9rem;
+      font-family: "Syne", sans-serif;
+      font-size: 1.05rem;
+      font-weight: 800;
+    }
+
+    .web-admin-stat {
+      min-height: 96px;
+      border-left: 4px solid #a20405;
+    }
+
+    .web-admin-stat-number {
+      font-family: "Syne", sans-serif;
+      font-size: 1.7rem;
+      font-weight: 800;
+      color: #111827;
+    }
+
+    .web-admin-muted {
+      color: #6b7280;
+      font-size: 0.9rem;
+    }
+
+    .web-admin-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .web-admin-table {
+      min-width: 720px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 800;
+      text-transform: capitalize;
+    }
+
+    .status-pending { background: #fef3c7; color: #92400e; }
+    .status-approved { background: #dbeafe; color: #1e40af; }
+    .status-checked_in { background: #ede9fe; color: #5b21b6; }
+    .status-completed { background: #d1fae5; color: #065f46; }
+    .status-rejected { background: #fee2e2; color: #991b1b; }
+
+    @media (min-width: 768px) {
+      .web-admin-sidebar {
+        display: block;
+      }
+
+      .web-admin-mobilebar {
+        display: none;
+      }
+
+      .web-admin-main {
+        padding: 2rem 2rem 3rem;
+        margin-left: 220px;
+      }
+    }
+  </style>
+
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  {% set nav_items = [
+    ('web_admin.web_admin_dashboard', 'fa-gauge', 'Dashboard'),
+    ('web_admin.web_admin_slots', 'fa-calendar-days', 'Slot Management'),
+    ('web_admin.web_admin_checkin_page', 'fa-circle-check', 'Check-In'),
+    ('web_admin.web_admin_bookings', 'fa-clipboard-list', 'Booking Requests'),
+    ('web_admin.web_admin_walkin', 'fa-person-walking', 'Walk-in Entry')
+  ] %}
+
+  <nav class="navbar web-admin-mobilebar navbar-expand-md sticky-top">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{{ url_for('web_admin.web_admin_dashboard') }}">
+        <img src="{{ url_for('static', filename='images/logo1.png') }}" alt="Shreeji Admin" />
+        <span>Shreeji Admin</span>
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#webAdminNav" aria-controls="webAdminNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="webAdminNav">
+        <div class="web-admin-nav w-100">
+          {% for endpoint, icon, label in nav_items %}
+            <a href="{{ url_for(endpoint) }}" class="web-admin-link {% if request.endpoint == endpoint %}active{% endif %}">
+              <i class="fa-solid {{ icon }}"></i> {{ label }}
+            </a>
+          {% endfor %}
+          <a href="{{ url_for('web_admin.web_admin_logout') }}" class="web-admin-link">
+            <i class="fa-solid fa-right-from-bracket"></i> Logout
+          </a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <aside class="web-admin-sidebar">
+    <a href="{{ url_for('web_admin.web_admin_dashboard') }}" class="web-admin-brand">
+      <img src="{{ url_for('static', filename='images/logo1.png') }}" alt="Shreeji Admin" />
+      <span>Shreeji Admin</span>
+    </a>
+    <nav class="web-admin-nav" aria-label="Web admin navigation">
+      {% for endpoint, icon, label in nav_items %}
+        <a href="{{ url_for(endpoint) }}" class="web-admin-link {% if request.endpoint == endpoint %}active{% endif %}">
+          <i class="fa-solid {{ icon }}"></i> {{ label }}
+        </a>
+      {% endfor %}
+      <a href="{{ url_for('web_admin.web_admin_logout') }}" class="web-admin-link">
+        <i class="fa-solid fa-right-from-bracket"></i> Logout
+      </a>
+    </nav>
+  </aside>
+
+  <main class="web-admin-main">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="mb-3">
+          {% for category, message in messages %}
+            {% set alert_class = 'success' if category == 'success' else 'danger' if category == 'error' else 'warning' %}
+            <div class="alert alert-{{ alert_class }} alert-dismissible fade show" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

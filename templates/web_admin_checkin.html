@@ -1,0 +1,110 @@
+{% extends "web_admin_base.html" %}
+{% block title %}Check-In - Shreeji Admin{% endblock %}
+
+{% block content %}
+<h1 class="web-admin-page-title"><i class="fa-solid fa-circle-check"></i> Check-In</h1>
+
+<div class="web-admin-card">
+  <h2>Find Booking</h2>
+  <form method="POST" action="{{ url_for('web_admin.web_admin_checkin_verify') }}" class="row g-3 align-items-end">
+    <div class="col-12 col-md-8">
+      <label class="form-label">Booking ID</label>
+      <input type="text" class="form-control" name="booking_id" value="{{ checkin_booking_id or '' }}" placeholder="BOOK1001" required />
+    </div>
+    <div class="col-12 col-md-4">
+      <button type="submit" class="btn btn-danger w-100">Search</button>
+    </div>
+  </form>
+
+  {% if booking_data %}
+    {% set b = booking_data %}
+    <div class="border rounded p-3 mt-3">
+      <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+        <div>
+          <strong>{{ b.booking_id }}</strong>
+          <div>{{ b.name }} - {{ b.vehicle }}</div>
+          <div class="web-admin-muted">{{ b.service }} | {{ b.formatted_date or b.date }}</div>
+        </div>
+        <span class="status-badge status-{{ b.status }}">{{ b.status.replace('_', ' ') }}</span>
+      </div>
+      <div class="web-admin-actions mt-3">
+        {% if b.status == 'approved' %}
+          <form method="POST" action="{{ url_for('web_admin.web_admin_checkin_booking', booking_id=b.booking_id) }}">
+            <button type="submit" class="btn btn-success btn-sm">Confirm Check-In</button>
+          </form>
+        {% elif b.status == 'checked_in' %}
+          <a class="btn btn-warning btn-sm" href="{{ url_for('web_admin.web_admin_complete_booking', booking_id=b.booking_id) }}">Mark Complete</a>
+        {% else %}
+          <span class="web-admin-muted">No check-in action available.</span>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+<div class="web-admin-card">
+  <h2>Today's Queue</h2>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle web-admin-table">
+      <thead>
+        <tr>
+          <th>Booking ID</th>
+          <th>Customer</th>
+          <th>Vehicle</th>
+          <th>Service</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in today_queue %}
+          <tr>
+            <td><strong>{{ b.booking_id }}</strong></td>
+            <td>{{ b.name }}</td>
+            <td>{{ b.vehicle }}</td>
+            <td>{{ b.service }}</td>
+            <td>
+              <form method="POST" action="{{ url_for('web_admin.web_admin_checkin_booking', booking_id=b.booking_id) }}">
+                <button type="submit" class="btn btn-sm btn-primary">Check-In</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="text-muted">No approved bookings waiting today.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="web-admin-card">
+  <h2>In Garage</h2>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle web-admin-table">
+      <thead>
+        <tr>
+          <th>Booking ID</th>
+          <th>Customer</th>
+          <th>Vehicle</th>
+          <th>Service</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in vehicles_in_garage %}
+          <tr>
+            <td><strong>{{ b.booking_id }}</strong></td>
+            <td>{{ b.name }}</td>
+            <td>{{ b.vehicle }}</td>
+            <td>{{ b.service }}</td>
+            <td>
+              <a class="btn btn-sm btn-warning" href="{{ url_for('web_admin.web_admin_complete_booking', booking_id=b.booking_id) }}" onclick="return confirm('Mark this service as complete?')">Mark Complete</a>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="text-muted">No vehicles currently in garage.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

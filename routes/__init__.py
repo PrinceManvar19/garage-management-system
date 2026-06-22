@@ -1,1 +1,1 @@
-
+from routes.web_admin_routes import web_admin_bp

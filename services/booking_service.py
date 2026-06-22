@@ -1,7 +1,7 @@
 import re
 from datetime import datetime, timedelta
 
-from db_neon import get_neon_db as get_db, query_dict_one
+from db_neon import query_dict_one
 from models.audit_log_model import log_audit_action
 from models.booking_model import (
     booking_id_exists,
@@ -15,6 +15,7 @@ from models.booking_model import (
     update_booking_status,
 )
 from models.customer_model import get_customer_by_id, get_customer_map
+from models.customer_model import get_customer_map_local
 from services.slot_service import get_slot_availability
 from utils.constants import (
     STATUS_APPROVED,
@@ -81,11 +82,18 @@ def enrich_booking(booking, customer_map=None):
     enriched["formatted_completed_at"] = format_datetime_display(
         enriched.get("completed_at")
     )
+    enriched["slot_label"] = (
+        "Walk-in"
+        if enriched.get("source") == "direct_walkin"
+        else (enriched.get("formatted_date") or enriched.get("date") or "")
+    )
 
     return enriched
 
 
 def generate_unique_booking_id(prefix):
+    # This is still optimistic under concurrent booking requests. A Neon sequence
+    # or locked counter table would make ID allocation atomic.
     latest_id = get_latest_booking_id(prefix)
 
     start_number = (
@@ -158,10 +166,6 @@ def _validate_phone(phone):
     return bool(PHONE_PATTERN.fullmatch(normalize_phone(phone)))
 
 
-def _begin_write_transaction():
-    pass
-
-
 def _validate_booking_input(customer_id, phone, vehicle, service, date):
     normalized_customer_id = (customer_id or "").strip().upper()
     normalized_phone = normalize_phone(phone)
@@ -208,6 +212,7 @@ def create_booking_for_customer(
     date,
     performed_by=None,
     source="customer_portal",
+    slot_id="date",
 ):
     normalized_name, normalized_phone, normalized_vehicle, normalized_brand_model, normalized_service, normalized_date = _normalize_booking_data(
         name, phone, vehicle, brand_model, service, date
@@ -268,6 +273,9 @@ def create_booking_for_customer(
         customer.get("phone", "")
     )
 
+    direct_walkin = slot_id is None
+    now_text = datetime.now().strftime("%Y-%m-%d %H:%M")
+
     booking = {
         "booking_id": generate_unique_booking_id("BOOK"),
         "customer_id": normalized_customer_id,
@@ -277,11 +285,11 @@ def create_booking_for_customer(
         "brand_model": normalized_brand_model,
         "service": normalized_service,
         "date": normalized_date,
-        "status": STATUS_PENDING,
-        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "checked_in_at": None,
+        "status": STATUS_CHECKED_IN if direct_walkin else STATUS_PENDING,
+        "created_at": now_text,
+        "checked_in_at": now_text if direct_walkin else None,
         "completed_at": None,
-        "actual_visit_date": None,
+        "actual_visit_date": normalized_date if direct_walkin else None,
         "is_rescheduled": 0,
         "whatsapp_sent": 0,
         "msg_approved_sent": 0,
@@ -292,21 +300,16 @@ def create_booking_for_customer(
     }
 
     try:
-        _begin_write_transaction()
+        if not direct_walkin:
+            slot = get_slot_availability(booking["date"])
 
-        slot = get_slot_availability(booking["date"])
+            if not slot:
+                return False, "No slots available for selected date.", None
 
-        if not slot:
-            get_db().rollback()
-            return False, "No slots available for selected date.", None
-
-        if slot["available"] <= 0:
-            get_db().rollback()
-            return False, "All slots are booked for this date.", None
+            if slot["available"] <= 0:
+                return False, "All slots are booked for this date.", None
 
         create_booking(booking)
-
-        get_db().commit()
 
         try:
             log_audit_action(
@@ -324,14 +327,10 @@ def create_booking_for_customer(
                 },
             )
 
-            get_db().commit()
-
         except Exception:
             pass
 
     except Exception as error:
-        get_db().rollback()
-
         log_action(
             "BOOKING ERROR",
             f"{booking.get('booking_id', 'unknown')} - {error}",
@@ -369,13 +368,34 @@ def get_admin_bookings(filters=None):
     ]
 
 
-def get_today_bookings(today_date):
-    customer_map = get_customer_map()
+def get_admin_bookings_local(filters=None):
+    from models.booking_model import search_bookings_local
+
+    filters = filters or {}
+    bookings = search_bookings_local(
+        query=filters.get("query"),
+        date=filters.get("date"),
+        status=filters.get("status"),
+    )
+    customer_map = get_customer_map_local()
+    return [enrich_booking(booking, customer_map) for booking in bookings]
+
+
+def get_today_bookings(today_date, customer_map=None):
+    if customer_map is None:
+        customer_map = get_customer_map()
 
     return [
         enrich_booking(booking, customer_map)
         for booking in fetch_today_bookings(today_date)
     ]
+
+
+def get_today_bookings_local(today_date):
+    from models.booking_model import get_today_bookings_local as fetch_local
+
+    customer_map = get_customer_map_local()
+    return [enrich_booking(booking, customer_map) for booking in fetch_local(today_date)]
 
 
 def get_booking_stats(bookings):
@@ -399,6 +419,11 @@ def get_booking_stats(bookings):
 
 def get_today_stats(today_date):
     bookings = get_today_bookings(today_date)
+    return get_booking_stats(bookings)
+
+
+def get_today_stats_local(today_date):
+    bookings = get_today_bookings_local(today_date)
     return get_booking_stats(bookings)
 
 
@@ -482,10 +507,14 @@ def build_whatsapp_message(booking):
         return None, {}
 
     status = booking.get("status", "")
+    name = booking.get("name", "")
+    booking_id = booking.get("booking_id", "")
+
+    if not name or not booking_id:
+        return None, {}
 
     message = (
-        f"Hello {booking.get('name', '')}, "
-        f"your booking {booking.get('booking_id', '')} "
+        f"Hello {name}, your booking {booking_id} "
         f"status is now: {status.upper()}."
     )
 
@@ -515,6 +544,7 @@ def create_manual_booking_with_customer(
     service,
     date,
     performed_by=None,
+    slot_id=None,
 ):
     return create_booking_for_customer(
         customer_id,
@@ -525,5 +555,6 @@ def create_manual_booking_with_customer(
         service,
         date,
         performed_by,
-        source="manual",
+        source="direct_walkin" if slot_id is None else "manual",
+        slot_id=slot_id,
     )
