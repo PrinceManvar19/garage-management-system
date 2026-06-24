@@ -2,10 +2,10 @@
 {% block title %}Booking Requests - Shreeji Admin{% endblock %}
 
 {% block content %}
-<h1 class="web-admin-page-title"><i class="fa-solid fa-clipboard-list"></i> Booking Requests</h1>
+<div class="web-admin-header"><div><h1 class="web-admin-page-title"><i class="fa-solid fa-clipboard-list"></i> Booking Requests</h1><p class="web-admin-page-sub">Review, approve, reject, and move bookings through service.</p></div></div>
 
 <div class="web-admin-card">
-  <h2>Filters</h2>
+  <h2><i class="fa-solid fa-filter"></i> Filters</h2>
   <form method="GET" action="{{ url_for('web_admin.web_admin_bookings') }}" class="row g-3 align-items-end">
     <div class="col-12 col-md-3">
       <label class="form-label">Date</label>
@@ -32,7 +32,7 @@
 </div>
 
 <div class="web-admin-card">
-  <h2>Requests</h2>
+  <h2><i class="fa-solid fa-clipboard-list"></i> Requests</h2>
   <div class="row g-3">
     {% for b in bookings %}
       <div class="col-12 col-xl-6">
@@ -71,3 +71,4 @@
   </div>
 </div>
 {% endblock %}
+

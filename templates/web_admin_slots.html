@@ -2,10 +2,10 @@
 {% block title %}Slot Management - Shreeji Admin{% endblock %}
 
 {% block content %}
-<h1 class="web-admin-page-title"><i class="fa-solid fa-calendar-days"></i> Slot Management</h1>
+<div class="web-admin-header"><div><h1 class="web-admin-page-title"><i class="fa-solid fa-calendar-days"></i> Slot Management</h1><p class="web-admin-page-sub">Manage daily booking capacity and slot status.</p></div></div>
 
 <div class="web-admin-card">
-  <h2>Add Slot Capacity</h2>
+  <h2><i class="fa-solid fa-plus"></i> Add Slot Capacity</h2>
   <form method="POST" action="{{ url_for('web_admin.web_admin_set_slots') }}" class="row g-3 align-items-end">
     <div class="col-12 col-md-5">
       <label class="form-label">Date</label>
@@ -22,7 +22,7 @@
 </div>
 
 <div class="web-admin-card">
-  <h2>Upcoming Slots</h2>
+  <h2><i class="fa-solid fa-calendar-days"></i> Upcoming Slots</h2>
   <div class="table-responsive">
     <table class="table table-sm align-middle web-admin-table">
       <thead>
@@ -94,3 +94,4 @@
   </div>
 </div>
 {% endblock %}
+

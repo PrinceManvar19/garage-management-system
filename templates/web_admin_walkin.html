@@ -2,7 +2,7 @@
 {% block title %}Walk-in Entry - Shreeji Admin{% endblock %}
 
 {% block content %}
-<h1 class="web-admin-page-title"><i class="fa-solid fa-person-walking"></i> Walk-in Entry</h1>
+<div class="web-admin-header"><div><h1 class="web-admin-page-title"><i class="fa-solid fa-motorcycle"></i> Walk-in Entry</h1><p class="web-admin-page-sub">Add direct garage visits from phone or counter.</p></div></div>
 
 <div class="web-admin-card">
   <form method="POST" action="{{ url_for('web_admin.web_admin_walkin') }}" id="webAdminWalkinForm">
@@ -176,3 +176,4 @@
   syncSlotMode();
 </script>
 {% endblock %}
+

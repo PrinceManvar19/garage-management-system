@@ -2,7 +2,7 @@
 {% block title %}Dashboard - Shreeji Admin{% endblock %}
 
 {% block content %}
-<h1 class="web-admin-page-title"><i class="fa-solid fa-gauge"></i> Dashboard</h1>
+<div class="web-admin-header"><div><h1 class="web-admin-page-title"><i class="fa-solid fa-gauge"></i> Admin Dashboard</h1><p class="web-admin-page-sub">Shreeji Auto Services - Garage Management</p></div></div>
 
 <div class="row g-3 mb-3">
   {% for label, value in [
@@ -22,7 +22,7 @@
 </div>
 
 <div class="web-admin-card">
-  <h2>Vehicles in Garage</h2>
+  <h2><i class="fa-solid fa-warehouse"></i> Vehicles in Garage</h2>
   <div class="table-responsive">
     <table class="table table-sm align-middle web-admin-table">
       <thead>
@@ -50,7 +50,7 @@
 </div>
 
 <div class="web-admin-card">
-  <h2>Today's Appointments <span class="web-admin-muted">({{ today_display or today }})</span></h2>
+  <h2><i class="fa-solid fa-calendar-day"></i> Today's Appointments <span class="web-admin-muted">({{ today_display or today }})</span></h2>
   <div class="table-responsive">
     <table class="table table-sm align-middle web-admin-table">
       <thead>
@@ -78,7 +78,7 @@
 </div>
 
 <div class="web-admin-card">
-  <h2>Late Arrivals</h2>
+  <h2><i class="fa-solid fa-rotate"></i> Late Arrivals</h2>
   <div class="table-responsive">
     <table class="table table-sm align-middle web-admin-table">
       <thead>
@@ -111,3 +111,4 @@
   </div>
 </div>
 {% endblock %}
+

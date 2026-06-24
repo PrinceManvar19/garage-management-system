@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin Login - Shreeji Auto Service</title>
+  <title>Admin Login - Shreeji Auto Services</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -17,44 +17,118 @@
       display: grid;
       place-items: center;
       padding: 1rem;
-      background: #f7f7f7;
+      background:
+        radial-gradient(circle at 20% 50%, rgba(162, 4, 5, 0.28), transparent 35%),
+        linear-gradient(135deg, #1a1a1e, #2b0b0b);
       font-family: "DM Sans", sans-serif;
     }
 
     .login-card {
-      width: min(100%, 420px);
-      padding: 1.5rem;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
+      width: min(100%, 430px);
+      padding: 1.6rem;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 20px;
       background: #fff;
-      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.1);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38);
+    }
+
+    .login-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .login-brand img {
+      width: 58px;
+      height: 58px;
+      object-fit: contain;
+      flex-shrink: 0;
+    }
+
+    .login-brand-name {
+      color: #1a1a1e;
+      font-family: "Syne", sans-serif;
+      font-size: 1.25rem;
+      font-weight: 800;
+      line-height: 1.05;
+    }
+
+    .login-brand-sub {
+      display: block;
+      color: #777;
+      font-family: "DM Sans", sans-serif;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
     }
 
     h1 {
-      margin-bottom: 1rem;
+      margin: 0 0 0.35rem;
       color: #111827;
       font-family: "Syne", sans-serif;
-      font-size: 1.55rem;
+      font-size: 1.45rem;
       font-weight: 800;
+    }
+
+    .login-sub {
+      margin: 0 0 1.25rem;
+      color: #6b7280;
+      font-size: 0.9rem;
+    }
+
+    .form-label {
+      color: #111;
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .form-control {
+      min-height: 44px;
+      border: 1.5px solid #e5e5e5;
+      border-radius: 12px;
+      color: #111;
+      box-shadow: none;
+    }
+
+    .form-control:focus {
+      border-color: #a20405;
+      box-shadow: 0 0 0 3px rgba(162, 4, 5, 0.08);
     }
 
     .btn-admin {
+      min-height: 44px;
       background: #a20405;
       border-color: #a20405;
+      border-radius: 12px;
       color: #fff;
       font-weight: 800;
+      box-shadow: 0 14px 30px rgba(162, 4, 5, 0.22);
     }
 
     .btn-admin:hover {
-      background: #7f0304;
-      border-color: #7f0304;
+      background: #7a0304;
+      border-color: #7a0304;
       color: #fff;
+      transform: translateY(-1px);
     }
   </style>
 </head>
 <body>
   <div class="login-card">
-    <h1>Admin Login - Shreeji Auto Service</h1>
+    <div class="login-brand">
+      <img src="{{ url_for('static', filename='images/logo1.png') }}" alt="Shreeji Auto Services" />
+      <div class="login-brand-name">
+        Shreeji
+        <span class="login-brand-sub">Auto Services</span>
+      </div>
+    </div>
+
+    <h1>Admin Login</h1>
+    <p class="login-sub">Garage management access for daily operations.</p>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -65,24 +139,22 @@
       {% endif %}
     {% endwith %}
 
+    {# Admin email OTP login is temporarily disabled. #}
     <form method="POST" action="{{ url_for('web_admin.web_admin_login') }}">
+      <input type="hidden" name="form_action" value="login" />
       <div class="mb-3">
-        <label for="identifier" class="form-label">Customer/Admin ID or Phone</label>
+        <label for="identifier" class="form-label">Admin ID or Phone</label>
         <input type="text" class="form-control" id="identifier" name="identifier" autocomplete="username" required autofocus />
       </div>
-      {% if require_pin %}
-        <div class="mb-3">
-          <label for="admin_pin" class="form-label">Admin PIN</label>
-          <input type="password" class="form-control" id="admin_pin" name="admin_pin" autocomplete="current-password" required />
-        </div>
-      {% endif %}
-      <button type="submit" class="btn btn-admin w-100">Login</button>
+      <button type="submit" class="btn btn-admin w-100"><i class="fa-solid fa-right-to-bracket"></i> Login</button>
     </form>
+
 
     <div class="d-flex justify-content-between align-items-center gap-3 mt-3">
       <a href="{{ url_for('auth.login') }}" class="link-danger text-decoration-none">&larr; Customer Login</a>
     </div>
-    <p class="text-muted small mb-0 mt-3">This panel is for garage management only</p>
   </div>
 </body>
 </html>
+
+

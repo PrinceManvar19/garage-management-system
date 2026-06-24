@@ -2,10 +2,10 @@
 {% block title %}Check-In - Shreeji Admin{% endblock %}
 
 {% block content %}
-<h1 class="web-admin-page-title"><i class="fa-solid fa-circle-check"></i> Check-In</h1>
+<div class="web-admin-header"><div><h1 class="web-admin-page-title"><i class="fa-solid fa-circle-check"></i> Check-In</h1><p class="web-admin-page-sub">Verify arrivals and track vehicles currently in garage.</p></div></div>
 
 <div class="web-admin-card">
-  <h2>Find Booking</h2>
+  <h2><i class="fa-solid fa-magnifying-glass"></i> Find Booking</h2>
   <form method="POST" action="{{ url_for('web_admin.web_admin_checkin_verify') }}" class="row g-3 align-items-end">
     <div class="col-12 col-md-8">
       <label class="form-label">Booking ID</label>
@@ -43,7 +43,7 @@
 </div>
 
 <div class="web-admin-card">
-  <h2>Today's Queue</h2>
+  <h2><i class="fa-solid fa-list-check"></i> Today's Queue</h2>
   <div class="table-responsive">
     <table class="table table-sm align-middle web-admin-table">
       <thead>
@@ -77,7 +77,7 @@
 </div>
 
 <div class="web-admin-card">
-  <h2>In Garage</h2>
+  <h2><i class="fa-solid fa-warehouse"></i> In Garage</h2>
   <div class="table-responsive">
     <table class="table table-sm align-middle web-admin-table">
       <thead>
@@ -108,3 +108,4 @@
   </div>
 </div>
 {% endblock %}
+

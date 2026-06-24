@@ -180,12 +180,14 @@ def _handle_walkin_submission(form, default_date, performed_by=None):
 
 @web_admin_bp.route("/login", methods=["GET", "POST"])
 def web_admin_login():
+    # Admin email OTP is temporarily disabled for now.
+    session.pop("admin_otp", None)
+
     if request.method == "POST":
         identifier = request.form.get("identifier", "").strip()
-        admin_pin = request.form.get("admin_pin", "")
         try:
             user = login_user_by_identifier(identifier)
-            if user and user["role"] == "admin" and _web_admin_pin_valid(admin_pin):
+            if user and user["role"] == "admin":
                 session.clear()
                 set_user_session(user["id"], user["name"], user["role"], user.get("phone", ""))
                 flash("Login successful!", "success")
@@ -195,7 +197,7 @@ def web_admin_login():
 
         flash("Invalid admin credentials. Please check and try again.", "error")
 
-    return render_template("web_admin_login.html", require_pin=bool(_web_admin_pin()))
+    return render_template("web_admin_login.html")
 
 
 @web_admin_bp.route("/logout")
@@ -499,3 +501,4 @@ def web_admin_complete_booking(booking_id):
         _refresh_cache(booking_id)
     fallback = redirect(url_for("web_admin.web_admin_checkin_page", booking_id=booking_id))
     return _redirect_with_whatsapp(booking_id, get_booking_by_id(booking_id) or booking, fallback)
+
