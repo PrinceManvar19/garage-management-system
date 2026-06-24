@@ -49,14 +49,20 @@
 
           <div class="web-admin-actions mt-3">
             {% if b.status == 'pending' %}
-              <a class="btn btn-sm btn-success" href="{{ url_for('web_admin.web_admin_approve_booking', booking_id=b.booking_id) }}">Approve</a>
-              <a class="btn btn-sm btn-outline-danger" href="{{ url_for('web_admin.web_admin_reject_booking', booking_id=b.booking_id) }}" onclick="return confirm('Reject this booking?')">Reject</a>
+              <form method="POST" action="{{ url_for('web_admin.web_admin_approve_booking', booking_id=b.booking_id) }}" style="display:inline">
+                <button type="submit" class="btn btn-sm btn-success">Approve</button>
+              </form>
+              <form method="POST" action="{{ url_for('web_admin.web_admin_reject_booking', booking_id=b.booking_id) }}" style="display:inline" onsubmit="return confirm('Reject this booking?')">
+                <button type="submit" class="btn btn-sm btn-outline-danger">Reject</button>
+              </form>
             {% elif b.status == 'approved' %}
               <form method="POST" action="{{ url_for('web_admin.web_admin_checkin_booking', booking_id=b.booking_id) }}">
                 <button type="submit" class="btn btn-sm btn-primary">Check-In</button>
               </form>
             {% elif b.status == 'checked_in' %}
-              <a class="btn btn-sm btn-warning" href="{{ url_for('web_admin.web_admin_complete_booking', booking_id=b.booking_id) }}" onclick="return confirm('Mark this service as complete?')">Complete</a>
+              <form method="POST" action="{{ url_for('web_admin.web_admin_complete_booking', booking_id=b.booking_id) }}" style="display:inline" onsubmit="return confirm('Mark this service as complete?')">
+                <button type="submit" class="btn btn-sm btn-warning">Complete</button>
+              </form>
             {% else %}
               <span class="web-admin-muted">No action available</span>
             {% endif %}

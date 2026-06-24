@@ -369,7 +369,7 @@ def web_admin_checkin_verify():
     return redirect(url_for("web_admin.web_admin_checkin_page"))
 
 
-@web_admin_bp.route("/checkin/<booking_id>", methods=["GET", "POST"])
+@web_admin_bp.route("/checkin/<booking_id>", methods=["POST"])
 def web_admin_checkin_booking(booking_id):
     admin_guard = _require_web_admin()
     if admin_guard is not None:
@@ -408,7 +408,7 @@ def web_admin_bookings():
     )
 
 
-@web_admin_bp.route("/approve/<booking_id>")
+@web_admin_bp.route("/approve/<booking_id>", methods=["POST"])
 def web_admin_approve_booking(booking_id):
     admin_guard = _require_web_admin()
     if admin_guard is not None:
@@ -425,7 +425,7 @@ def web_admin_approve_booking(booking_id):
     return _redirect_with_whatsapp(booking_id, get_booking_by_id(booking_id) or booking, fallback)
 
 
-@web_admin_bp.route("/reject/<booking_id>")
+@web_admin_bp.route("/reject/<booking_id>", methods=["POST"])
 def web_admin_reject_booking(booking_id):
     admin_guard = _require_web_admin()
     if admin_guard is not None:
@@ -486,7 +486,7 @@ def web_admin_find_customer():
     })
 
 
-@web_admin_bp.route("/complete/<booking_id>")
+@web_admin_bp.route("/complete/<booking_id>", methods=["POST"])
 def web_admin_complete_booking(booking_id):
     admin_guard = _require_web_admin()
     if admin_guard is not None:

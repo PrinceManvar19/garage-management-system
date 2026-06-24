@@ -33,7 +33,9 @@
             <button type="submit" class="btn btn-success btn-sm">Confirm Check-In</button>
           </form>
         {% elif b.status == 'checked_in' %}
-          <a class="btn btn-warning btn-sm" href="{{ url_for('web_admin.web_admin_complete_booking', booking_id=b.booking_id) }}">Mark Complete</a>
+          <form method="POST" action="{{ url_for('web_admin.web_admin_complete_booking', booking_id=b.booking_id) }}" style="display:inline">
+            <button type="submit" class="btn btn-warning btn-sm">Mark Complete</button>
+          </form>
         {% else %}
           <span class="web-admin-muted">No check-in action available.</span>
         {% endif %}
@@ -97,7 +99,9 @@
             <td>{{ b.vehicle }}</td>
             <td>{{ b.service }}</td>
             <td>
-              <a class="btn btn-sm btn-warning" href="{{ url_for('web_admin.web_admin_complete_booking', booking_id=b.booking_id) }}" onclick="return confirm('Mark this service as complete?')">Mark Complete</a>
+              <form method="POST" action="{{ url_for('web_admin.web_admin_complete_booking', booking_id=b.booking_id) }}" style="display:inline" onsubmit="return confirm('Mark this service as complete?')">
+                <button type="submit" class="btn btn-sm btn-warning">Mark Complete</button>
+              </form>
             </td>
           </tr>
         {% else %}
