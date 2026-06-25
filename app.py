@@ -141,6 +141,14 @@ def create_app():
         register_configuration_error_routes(app, message)
         return app
 
+    try:
+        from services.cache_sync import start_background_sync
+
+        start_background_sync(app)
+        print("Local SQLite cache sync started.", flush=True)
+    except Exception as error:
+        print(f"WARNING: Local SQLite cache sync failed to start: {error}", flush=True)
+
     @app.before_request
     def sync_session_user():
         ensure_session_user()
