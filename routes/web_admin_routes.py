@@ -23,6 +23,7 @@ from services.booking_service import (
 )
 from services.slot_service import get_slots_for_admin_local, set_slot_total
 from utils.constants import STATUS_APPROVED, STATUS_CHECKED_IN
+from utils.decorators import login_required
 from utils.helpers import format_date_display, get_today_date_string, log_action
 
 
@@ -61,9 +62,9 @@ def _refresh_cache_if_stale():
 
 
 def _require_web_admin():
-    if session.get("role") != "admin":
+    if not session.get("admin_logged_in"):
         flash("Admin access required", "error")
-        return redirect(url_for("web_admin.web_admin_login"))
+        return redirect(url_for("auth.login"))
     return None
 
 
@@ -79,7 +80,7 @@ def _web_admin_pin_valid(submitted_pin):
 
 
 def _get_current_user_id():
-    return session.get("user", {}).get("id") or session.get("admin_id") or "unknown"
+    return session.get("admin_email") or session.get("user", {}).get("id") or session.get("admin_id") or "unknown"
 
 
 def _get_whatsapp_url(booking_id, booking):
@@ -178,7 +179,7 @@ def _handle_walkin_submission(form, default_date, performed_by=None):
     )
 
 
-@web_admin_bp.route("/login", methods=["GET", "POST"])
+@web_admin_bp.route("/legacy-login", methods=["GET", "POST"])
 def web_admin_login():
     # Admin email OTP is temporarily disabled for now.
     session.pop("admin_otp", None)
@@ -200,14 +201,15 @@ def web_admin_login():
     return render_template("web_admin_login.html")
 
 
-@web_admin_bp.route("/logout")
+@web_admin_bp.route("/legacy-logout")
 def web_admin_logout():
     session.clear()
     flash("Logged out successfully", "success")
-    return redirect(url_for("web_admin.web_admin_login"))
+    return redirect(url_for("auth.login"))
 
 
 @web_admin_bp.route("/")
+@login_required
 def web_admin_dashboard():
     admin_guard = _require_web_admin()
     if admin_guard is not None:
@@ -239,6 +241,7 @@ def web_admin_dashboard():
 
 
 @web_admin_bp.route("/slots")
+@login_required
 def web_admin_slots():
     admin_guard = _require_web_admin()
     if admin_guard is not None:
@@ -252,6 +255,7 @@ def web_admin_slots():
 
 
 @web_admin_bp.route("/set-slots", methods=["POST"])
+@login_required
 def web_admin_set_slots():
     admin_guard = _require_web_admin()
     if admin_guard is not None:
@@ -283,6 +287,7 @@ def web_admin_set_slots():
 
 
 @web_admin_bp.route("/slots/<slot_id>/edit", methods=["POST"])
+@login_required
 def web_admin_edit_slot(slot_id):
     admin_guard = _require_web_admin()
     if admin_guard is not None:
@@ -326,6 +331,7 @@ def web_admin_edit_slot(slot_id):
 
 
 @web_admin_bp.route("/checkin")
+@login_required
 def web_admin_checkin_page():
     admin_guard = _require_web_admin()
     if admin_guard is not None:
@@ -356,6 +362,7 @@ def web_admin_checkin_page():
 
 
 @web_admin_bp.route("/checkin/verify", methods=["POST"])
+@login_required
 def web_admin_checkin_verify():
     admin_guard = _require_web_admin()
     if admin_guard is not None:
@@ -370,6 +377,7 @@ def web_admin_checkin_verify():
 
 
 @web_admin_bp.route("/checkin/<booking_id>", methods=["POST"])
+@login_required
 def web_admin_checkin_booking(booking_id):
     admin_guard = _require_web_admin()
     if admin_guard is not None:
@@ -388,6 +396,7 @@ def web_admin_checkin_booking(booking_id):
 
 
 @web_admin_bp.route("/bookings")
+@login_required
 def web_admin_bookings():
     admin_guard = _require_web_admin()
     if admin_guard is not None:
@@ -409,6 +418,7 @@ def web_admin_bookings():
 
 
 @web_admin_bp.route("/approve/<booking_id>", methods=["POST"])
+@login_required
 def web_admin_approve_booking(booking_id):
     admin_guard = _require_web_admin()
     if admin_guard is not None:
@@ -426,6 +436,7 @@ def web_admin_approve_booking(booking_id):
 
 
 @web_admin_bp.route("/reject/<booking_id>", methods=["POST"])
+@login_required
 def web_admin_reject_booking(booking_id):
     admin_guard = _require_web_admin()
     if admin_guard is not None:
@@ -443,6 +454,7 @@ def web_admin_reject_booking(booking_id):
 
 
 @web_admin_bp.route("/walkin", methods=["GET", "POST"])
+@login_required
 def web_admin_walkin():
     admin_guard = _require_web_admin()
     if admin_guard is not None:
@@ -467,6 +479,7 @@ def web_admin_walkin():
 
 
 @web_admin_bp.route("/find-customer")
+@login_required
 def web_admin_find_customer():
     admin_guard = _require_web_admin()
     if admin_guard is not None:
@@ -487,6 +500,7 @@ def web_admin_find_customer():
 
 
 @web_admin_bp.route("/complete/<booking_id>", methods=["POST"])
+@login_required
 def web_admin_complete_booking(booking_id):
     admin_guard = _require_web_admin()
     if admin_guard is not None:

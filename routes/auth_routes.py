@@ -46,13 +46,13 @@ def register():
         except Exception as error:
             log_action("REGISTRATION ROUTE ERROR", str(error))
             flash("Registration failed. Please try again.", "error")
-            return redirect(url_for("auth.register"))
+            return redirect(url_for("public_auth.register"))
 
         if not success:
             flash(message, "error")
-            return redirect(url_for("auth.register"))
+            return redirect(url_for("public_auth.register"))
         flash("Registration successful. Please login.", "success")
-        return redirect(url_for("auth.login"))
+        return redirect(url_for("public_auth.login"))
     return render_template("register.html")
 
 
@@ -76,7 +76,7 @@ def find_id():
         else:
             flash("No match found. Visit service center.", "error")
         session["show_find_id_toast"] = True
-        return redirect(url_for("auth.find_id"))
+        return redirect(url_for("public_auth.find_id"))
 
     toast = session.pop("show_find_id_toast", False)
     return render_template("find_id.html", toast=toast)

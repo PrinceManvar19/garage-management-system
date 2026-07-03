@@ -76,15 +76,20 @@
   {% block extra_head %}{% endblock %}
 </head>
 <body>
-  {% set nav_items = [
-    ('web_admin.web_admin_dashboard', 'fa-gauge', 'Dashboard'),
-    ('web_admin.web_admin_checkin_page', 'fa-circle-check', 'Check-In'),
-    ('web_admin.web_admin_slots', 'fa-calendar-days', 'Slot Management'),
-    ('web_admin.web_admin_bookings', 'fa-clipboard-list', 'Booking Requests'),
-    ('web_admin.web_admin_walkin', 'fa-motorcycle', 'Walk-in Entry')
-  ] %}
+  {% if session.get('admin_logged_in') %}
+    {% set nav_items = [
+      ('web_admin.web_admin_dashboard', 'fa-gauge', 'Dashboard'),
+      ('web_admin.web_admin_checkin_page', 'fa-circle-check', 'Check-In'),
+      ('web_admin.web_admin_slots', 'fa-calendar-days', 'Slot Management'),
+      ('web_admin.web_admin_bookings', 'fa-clipboard-list', 'Booking Requests'),
+      ('web_admin.web_admin_walkin', 'fa-motorcycle', 'Walk-in Entry')
+    ] %}
+  {% else %}
+    {% set nav_items = [] %}
+  {% endif %}
 
   <div class="web-admin-shell">
+    {% if session.get('admin_logged_in') %}
     <aside class="web-admin-sidebar">
       <a href="{{ url_for('web_admin.web_admin_dashboard') }}" class="web-admin-brand">
         <img src="{{ url_for('static', filename='images/logo1.png') }}" alt="Shreeji Auto Services" />
@@ -102,12 +107,14 @@
         {% endfor %}
       </nav>
 
-      <a href="{{ url_for('web_admin.web_admin_logout') }}" class="web-admin-link web-admin-logout">
+      <a href="{{ url_for('auth.logout') }}" class="web-admin-link web-admin-logout">
         <i class="fa-solid fa-right-from-bracket"></i> Logout
       </a>
     </aside>
+    {% endif %}
 
     <main class="web-admin-main">
+      {% if session.get('admin_logged_in') %}
       <div class="web-admin-topbar">
         <div class="web-admin-refresh-controls" aria-label="Page refresh controls">
           <button type="button" class="web-admin-refresh-button" id="webAdminManualRefresh">
@@ -120,6 +127,7 @@
           </label>
         </div>
       </div>
+      {% endif %}
 
       <div class="web-admin-content">
         {% block content %}{% endblock %}

@@ -1,11 +1,13 @@
 import os
+from datetime import timedelta
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, request
 
 from db_neon import init_app as init_db_app
 from db_local import init_local_db
-from routes.auth_routes import auth_bp
+from blueprints.auth import auth_bp
+from routes.auth_routes import auth_bp as public_auth_bp
 from routes.customer_routes import customer_bp
 from routes.main_routes import main_bp
 from routes.web_admin_routes import web_admin_bp
@@ -102,6 +104,7 @@ def create_app():
     print_startup_diagnostics(environment, database_url)
 
     app = Flask(__name__)
+    app.permanent_session_lifetime = timedelta(hours=8)
 
     secret_key = os.environ.get("SECRET_KEY")
     if not secret_key:
@@ -155,6 +158,7 @@ def create_app():
 
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(public_auth_bp, name="public_auth")
     app.register_blueprint(customer_bp)
     app.register_blueprint(web_admin_bp)
 
