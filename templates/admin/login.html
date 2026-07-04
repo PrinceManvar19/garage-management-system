@@ -1,23 +1,38 @@
 {% extends "admin/base.html" %}
 {% block content %}
-<div class="d-flex justify-content-center align-items-center" style="min-height:70vh;">
-  <div class="card shadow-sm" style="width:100%;max-width:400px;">
+<div class="d-flex justify-content-center align-items-center" style="min-height:75vh;">
+  <div class="card shadow-sm" style="width:100%;max-width:420px;">
     <div class="card-body p-4">
-      <h5 class="card-title mb-1 fw-semibold">Admin Login</h5>
-      <p class="text-muted small mb-4">Enter your registered email to receive a one-time code.</p>
+      <h5 class="fw-semibold mb-1">Admin Login</h5>
+      <p class="text-muted small mb-4">Shreeji Auto Service</p>
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% for category, message in messages %}
-          <div class="alert alert-{{ category }} py-2">{{ message }}</div>
+          <div class="alert alert-{{ category }} py-2 small">{{ message }}</div>
         {% endfor %}
       {% endwith %}
       <form method="POST">
         <div class="mb-3">
-          <label class="form-label fw-medium">Email address</label>
+          <label class="form-label small fw-medium">Email</label>
           <input type="email" name="email" class="form-control" required autofocus
-                 placeholder="admin@example.com">
+                 autocomplete="username">
         </div>
-        <button type="submit" class="btn btn-primary w-100">Send OTP</button>
+        <div class="mb-3">
+          <label class="form-label small fw-medium">Password</label>
+          <input type="password" name="password" class="form-control" required
+                 autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary w-100">Login</button>
       </form>
+      <div class="text-center mt-3">
+        <a href="{{ url_for('auth.forgot_password') }}" class="text-muted small">
+          Forgot password?
+        </a>
+      </div>
+      <div class="text-center mt-2">
+        <a href="{{ url_for('main.home') }}" class="text-muted small">
+          &larr; Back to Home
+        </a>
+      </div>
     </div>
   </div>
 </div>

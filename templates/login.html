@@ -14,15 +14,14 @@
     </h2>
 
     <p class="auth-subtitle">
-      Already visited us before? Your phone number is already registered - just enter it below.<br>
-      Admin/Staff: enter your Admin ID (e.g. ADMIN001) or registered phone number.
+      Already visited us before? Your phone number is already registered - just enter it below.
     </p>
 
     {# Admin email OTP login is temporarily disabled. #}
       <form method="POST" action="/login" class="auth-form" id="loginForm">
         <input type="hidden" name="form_action" value="login">
-        <label class="form-label" for="loginIdentifier">Phone Number, Customer ID, or Admin ID *</label>
-        <input type="text" class="form-control auth-input" id="loginIdentifier" name="identifier" placeholder="9876543210, CUST1001, or ADMIN001" required data-trim>
+        <label class="form-label" for="loginIdentifier">Phone Number or Customer ID *</label>
+        <input type="text" class="form-control auth-input" id="loginIdentifier" name="identifier" placeholder="1234567890 or CUSTXXXX" required data-trim>
         <div class="invalid-feedback" id="loginIdentifierError" style="display:none; color:#dc3545; font-size:0.875rem; margin-top:0.25rem;"></div>
 
         <button type="submit" class="btn btn-primary w-100 auth-btn" data-loading-submit="true" data-loading-text="Logging in...">
