@@ -255,31 +255,83 @@ def init_neon_db():
 
 
 def seed_admins(cursor, db):
-    owner_phone = os.getenv("GARAGE_OWNER_PHONE", "9898135662").strip()
-    cursor.execute("""
-        INSERT INTO admins (id, name, phone)
-        VALUES (%s, %s, %s)
-        ON CONFLICT (id) DO UPDATE SET
-            name = EXCLUDED.name,
-            phone = CASE
-                WHEN EXCLUDED.phone <> '' THEN EXCLUDED.phone
-                ELSE admins.phone
-            END
-    """, (
-        "ADMIN001",
-        "Owner",
-        owner_phone
-    ))
+    # Seed admin accounts with passwords from env vars
+    # For each admin ID (ADMIN001, ADMIN002, etc.), check for a corresponding
+    # {ADMIN_ID}_PASSWORD env var. If found, seed/update password_hash.
+    # If not found, skip seeding that admin's password and log a warning.
 
-    cursor.execute("""
-        INSERT INTO admins (id, name, phone)
-        VALUES (%s, %s, %s)
-        ON CONFLICT (id) DO NOTHING
-    """, (
-        "ADMIN002",
-        "Manager",
-        ""
-    ))
+    admin_configs = [
+        {
+            "id": "ADMIN001",
+            "name": "Owner",
+            "phone_env": "GARAGE_OWNER_PHONE",
+            "password_env": "ADMIN001_PASSWORD",
+        },
+        {
+            "id": "ADMIN002",
+            "name": "Manager",
+            "phone_env": None,
+            "password_env": "ADMIN002_PASSWORD",
+        },
+    ]
+
+    for config in admin_configs:
+        admin_id = config["id"]
+        admin_name = config["name"]
+        password_env = config["password_env"]
+        phone_env = config["phone_env"]
+
+        # Get phone from env var if specified
+        phone = ""
+        if phone_env:
+            phone = os.getenv(phone_env, "").strip()
+
+        # Check if password env var is set
+        admin_password = os.getenv(password_env, "").strip()
+        password_hash = None
+
+        if admin_password:
+            from utils.auth_helpers import hash_password
+            password_hash = hash_password(admin_password)
+        else:
+            # Log warning if password env var not set (will be caught at login time)
+            print(
+                f"⚠️  WARNING: {password_env} not set in environment. "
+                f"Admin {admin_id} will not be able to log in.",
+                flush=True,
+            )
+
+        # Upsert admin record
+        if password_hash:
+            cursor.execute(
+                """
+                INSERT INTO admins (id, name, phone, password_hash)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    phone = CASE
+                        WHEN EXCLUDED.phone <> '' THEN EXCLUDED.phone
+                        ELSE admins.phone
+                    END,
+                    password_hash = EXCLUDED.password_hash
+                """,
+                (admin_id, admin_name, phone, password_hash),
+            )
+        else:
+            # Only insert/update admin record without password if env var not set
+            cursor.execute(
+                """
+                INSERT INTO admins (id, name, phone)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    phone = CASE
+                        WHEN EXCLUDED.phone <> '' THEN EXCLUDED.phone
+                        ELSE admins.phone
+                    END
+                """,
+                (admin_id, admin_name, phone),
+            )
 
     db.commit()
 
