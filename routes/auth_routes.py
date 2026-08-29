@@ -74,7 +74,7 @@ def logout():
     return redirect(url_for("main.home"))
 
 
-@auth_bp.route("/admin", methods=["GET", "POST"])
+@auth_bp.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
     """
     Dedicated admin login route.
@@ -99,8 +99,9 @@ def admin_login():
                 "admin",
                 admin.get("phone", "")
             )
+            session["admin_logged_in"] = True
             flash("Login successful!", "success")
-            return redirect("/admin/dashboard")
+            return redirect("/admin")
         else:
             flash("Invalid admin ID or password.", "error")
             return render_template("admin_login.html")
