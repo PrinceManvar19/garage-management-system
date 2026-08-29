@@ -1,9 +1,8 @@
 from flask import session
 
-from models.admin_model import get_admin_by_id
-from models.customer_model import get_customer_by_phone
+from models.admin_model import get_admin_by_id, get_admin_by_phone
+from models.customer_model import get_customer_by_id, get_customer_by_phone_or_id
 from utils.helpers import log_action, normalize_phone
-from utils.auth_helpers import verify_password
 
 
 def set_user_session(user_id, name, role, phone=""):
@@ -34,49 +33,63 @@ def ensure_session_user():
         session["user"] = expected
 
 
-def login_admin_by_id_and_password(admin_id, password):
-    """
-    Verify admin login using admin_id + password against admins table.
-    Returns admin record if credentials valid, None otherwise.
-    """
-    normalized_id = (admin_id or "").strip().upper()
+def login_user_by_id(user_id):
+    normalized_id = user_id.strip().upper()
+    admin = get_admin_by_id(normalized_id)
+    if admin:
+        return {"id": admin["id"], "name": admin["name"], "phone": admin.get("phone", ""), "role": "admin"}
 
+    customer = get_customer_by_id(normalized_id)
+    if customer:
+        return {
+            "id": customer["id"],
+            "name": customer["name"],
+            "phone": customer.get("phone", ""),
+            "role": "customer",
+        }
+
+    return None
+
+
+# CHANGED: Login can now resolve a user from phone number or existing Customer/Admin ID.
+
+def login_user_by_identifier(identifier):
+    normalized_identifier = (identifier or "").strip().upper()
+
+    # Check admin first for ADMIN* IDs.
+    if normalized_identifier.startswith("ADMIN"):
+        try:
+            admin = get_admin_by_id(normalized_identifier)
+            if admin:
+                return {"id": admin["id"], "name": admin["name"], "phone": admin.get("phone", ""), "role": "admin"}
+        except Exception as error:
+            log_action("ADMIN LOGIN ERROR", str(error))
+        return None
+
+    # Check admin by registered phone before treating the value as a customer login.
+    normalized_phone = normalize_phone(identifier)
+    if len(normalized_phone) == 10:
+        try:
+            admin = get_admin_by_phone(normalized_phone)
+            if admin:
+                return {"id": admin["id"], "name": admin["name"], "phone": admin.get("phone", ""), "role": "admin"}
+        except Exception as error:
+            log_action("ADMIN PHONE LOGIN ERROR", str(error))
+
+    # Phone or customer ID.
     try:
-        admin = get_admin_by_id(normalized_id)
+        customer = get_customer_by_phone_or_id(normalized_identifier)
     except Exception as error:
-        log_action("ADMIN LOGIN DB ERROR", str(error))
+        log_action("LOGIN ERROR", str(error))
         return None
 
-    if not admin:
-        return None
+    if customer:
+        return {
+            "id": customer["id"],
+            "name": customer["name"],
+            "phone": customer.get("phone", ""),
+            "role": "customer",
+        }
 
-    password_hash = admin.get("password_hash")
-    if not password_hash:
-        log_action("ADMIN LOGIN NO PASSWORD", f"Admin {normalized_id} has no password_hash set")
-        return None
-
-    if not verify_password(password, password_hash):
-        log_action("ADMIN LOGIN FAILED", f"Invalid password for admin {normalized_id}")
-        return None
-
-    return admin
-
-
-def login_customer_by_phone(phone):
-    """
-    Verify customer login using phone number only.
-    Returns customer record if found, None otherwise.
-    """
-    normalized_phone = normalize_phone(phone)
-
-    if len(normalized_phone) != 10:
-        return None
-
-    try:
-        customer = get_customer_by_phone(normalized_phone)
-    except Exception as error:
-        log_action("CUSTOMER LOGIN DB ERROR", str(error))
-        return None
-
-    return customer
+    return None
 

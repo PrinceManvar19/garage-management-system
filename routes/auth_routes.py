@@ -1,11 +1,7 @@
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
 from models.customer_model import create_customer, find_customer
-from services.auth_service import (
-    login_admin_by_id_and_password,
-    login_customer_by_phone,
-    set_user_session,
-)
+from services.auth_service import login_user_by_identifier, set_user_session
 from utils.helpers import log_action
 
 
@@ -14,64 +10,26 @@ auth_bp = Blueprint("auth", __name__)
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
+    # Admin email OTP is temporarily disabled for now.
+    session.pop("admin_otp", None)
+
     if request.method == "POST":
-        login_type = request.form.get("login_type", "").strip().lower()
-        
-        if login_type == "admin":
-            # Admin login: admin_id + password
-            admin_id = request.form.get("admin_id", "").strip()
-            password = request.form.get("password", "").strip()
-            
-            if not admin_id or not password:
-                flash("Admin ID and password are required.", "error")
-                return render_template("login.html")
-            
-            admin = login_admin_by_id_and_password(admin_id, password)
-            if admin:
+        identifier = request.form.get("identifier", "").strip()
+        try:
+            user = login_user_by_identifier(identifier)
+            if user:
                 session.clear()
-                set_user_session(
-                    admin["id"],
-                    admin["name"],
-                    "admin",
-                    admin.get("phone", "")
-                )
+                set_user_session(user["id"], user["name"], user["role"], user.get("phone", ""))
                 flash("Login successful!", "success")
-                return redirect("/admin")
-            else:
-                flash("Invalid admin ID or password.", "error")
-                return render_template("login.html")
-        
-        elif login_type == "customer":
-            # Customer login: phone number only
-            phone = request.form.get("phone", "").strip()
-            
-            if not phone:
-                flash("Phone number is required.", "error")
-                return render_template("login.html")
-            
-            try:
-                customer = login_customer_by_phone(phone)
-                if customer:
-                    session.clear()
-                    set_user_session(
-                        customer["id"],
-                        customer["name"],
-                        "customer",
-                        customer.get("phone", "")
-                    )
-                    flash("Login successful!", "success")
-                    return redirect(url_for("customer.dashboard"))
-                else:
-                    flash("Phone number not found. Please register first.", "error")
-                    return render_template("login.html")
-            except Exception as error:
-                log_action("CUSTOMER LOGIN ERROR", str(error))
-                flash("Login failed. Please try again.", "error")
-                return render_template("login.html")
-        
-        else:
-            flash("Invalid login type.", "error")
-            return render_template("login.html")
+
+                if user["role"] == "admin":
+                    return redirect("/admin")
+                return redirect(url_for("customer.dashboard"))
+
+        except Exception as error:
+            log_action("LOGIN ROUTE ERROR", f"{identifier}: {str(error)}")
+
+        flash("Invalid credentials. Please check and try again.", "error")
 
     return render_template("login.html")
 
@@ -88,13 +46,13 @@ def register():
         except Exception as error:
             log_action("REGISTRATION ROUTE ERROR", str(error))
             flash("Registration failed. Please try again.", "error")
-            return redirect(url_for("auth.register"))
+            return redirect(url_for("public_auth.register"))
 
         if not success:
             flash(message, "error")
-            return redirect(url_for("auth.register"))
+            return redirect(url_for("public_auth.register"))
         flash("Registration successful. Please login.", "success")
-        return redirect(url_for("auth.login"))
+        return redirect(url_for("public_auth.login"))
     return render_template("register.html")
 
 
@@ -118,7 +76,7 @@ def find_id():
         else:
             flash("No match found. Visit service center.", "error")
         session["show_find_id_toast"] = True
-        return redirect(url_for("auth.find_id"))
+        return redirect(url_for("public_auth.find_id"))
 
     toast = session.pop("show_find_id_toast", False)
     return render_template("find_id.html", toast=toast)
