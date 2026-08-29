@@ -26,28 +26,25 @@ def login():
         return redirect(url_for('web_admin.web_admin_dashboard'))
 
     if request.method == 'POST':
-        email = request.form.get('email', '').strip().lower()
+        admin_id = request.form.get('admin_id', '').strip()
         password = request.form.get('password', '').strip()
 
-        try:
-            conn = get_neon_db()
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT password_hash FROM admin_users WHERE email = %s",
-                    (email,)
-                )
-                row = cur.fetchone()
-        except Exception:
-            flash('Database error. Please try again.', 'danger')
+        if not admin_id or not password:
+            flash('Admin ID and password are required.', 'danger')
             return render_template('admin/login.html')
 
-        if not row or not verify_password(password, row[0]):
-            flash('Invalid email or password.', 'danger')
+        from services.auth_service import login_admin_by_id_and_password
+        admin = login_admin_by_id_and_password(admin_id, password)
+        
+        if not admin:
+            flash('Invalid admin ID or password.', 'danger')
             return render_template('admin/login.html')
 
         session.clear()
         session['admin_logged_in'] = True
-        session['admin_email'] = email
+        session['admin_id'] = admin['id']
+        session['admin_name'] = admin['name']
+        session['admin_email'] = admin.get('phone', '')  # Store phone as fallback for email-expecting code
         session.permanent = True
         return redirect(url_for('web_admin.web_admin_dashboard'))
 
