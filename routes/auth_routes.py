@@ -15,62 +15,31 @@ auth_bp = Blueprint("auth", __name__)
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        login_type = request.form.get("login_type", "").strip().lower()
+        # Customer login: phone number only
+        phone = request.form.get("phone", "").strip()
         
-        if login_type == "admin":
-            # Admin login: admin_id + password
-            admin_id = request.form.get("admin_id", "").strip()
-            password = request.form.get("password", "").strip()
-            
-            if not admin_id or not password:
-                flash("Admin ID and password are required.", "error")
-                return render_template("login.html")
-            
-            admin = login_admin_by_id_and_password(admin_id, password)
-            if admin:
+        if not phone:
+            flash("Phone number is required.", "error")
+            return render_template("login.html")
+        
+        try:
+            customer = login_customer_by_phone(phone)
+            if customer:
                 session.clear()
                 set_user_session(
-                    admin["id"],
-                    admin["name"],
-                    "admin",
-                    admin.get("phone", "")
+                    customer["id"],
+                    customer["name"],
+                    "customer",
+                    customer.get("phone", "")
                 )
                 flash("Login successful!", "success")
-                return redirect("/admin")
+                return redirect(url_for("customer.dashboard"))
             else:
-                flash("Invalid admin ID or password.", "error")
+                flash("Phone number not found. Please register first.", "error")
                 return render_template("login.html")
-        
-        elif login_type == "customer":
-            # Customer login: phone number only
-            phone = request.form.get("phone", "").strip()
-            
-            if not phone:
-                flash("Phone number is required.", "error")
-                return render_template("login.html")
-            
-            try:
-                customer = login_customer_by_phone(phone)
-                if customer:
-                    session.clear()
-                    set_user_session(
-                        customer["id"],
-                        customer["name"],
-                        "customer",
-                        customer.get("phone", "")
-                    )
-                    flash("Login successful!", "success")
-                    return redirect(url_for("customer.dashboard"))
-                else:
-                    flash("Phone number not found. Please register first.", "error")
-                    return render_template("login.html")
-            except Exception as error:
-                log_action("CUSTOMER LOGIN ERROR", str(error))
-                flash("Login failed. Please try again.", "error")
-                return render_template("login.html")
-        
-        else:
-            flash("Invalid login type.", "error")
+        except Exception as error:
+            log_action("CUSTOMER LOGIN ERROR", str(error))
+            flash("Login failed. Please try again.", "error")
             return render_template("login.html")
 
     return render_template("login.html")
@@ -103,6 +72,40 @@ def logout():
     session.clear()
     flash("Logged out successfully", "success")
     return redirect(url_for("main.home"))
+
+
+@auth_bp.route("/admin", methods=["GET", "POST"])
+def admin_login():
+    """
+    Dedicated admin login route.
+    
+    GET: Show admin login form
+    POST: Authenticate admin with ID + password
+    """
+    if request.method == "POST":
+        admin_id = request.form.get("admin_id", "").strip()
+        password = request.form.get("password", "").strip()
+        
+        if not admin_id or not password:
+            flash("Admin ID and password are required.", "error")
+            return render_template("admin_login.html")
+        
+        admin = login_admin_by_id_and_password(admin_id, password)
+        if admin:
+            session.clear()
+            set_user_session(
+                admin["id"],
+                admin["name"],
+                "admin",
+                admin.get("phone", "")
+            )
+            flash("Login successful!", "success")
+            return redirect("/admin/dashboard")
+        else:
+            flash("Invalid admin ID or password.", "error")
+            return render_template("admin_login.html")
+    
+    return render_template("admin_login.html")
 
 
 @auth_bp.route("/find-id", methods=["GET", "POST"])
