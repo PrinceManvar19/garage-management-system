@@ -13,18 +13,19 @@
       Welcome to <span>Shreeji</span>
     </h2>
 
-    <div style="margin-bottom: 1.5rem;">
-      <button type="button" class="btn btn-outline-primary w-100" id="customerLoginBtn" style="margin-bottom: 0.5rem;">Customer Login</button>
-      <button type="button" class="btn btn-outline-secondary w-100" id="adminLoginBtn">Admin Login</button>
-    </div>
-
-    <!-- Customer Login Form -->
-    <form method="POST" action="/login" class="auth-form" id="customerLoginForm" style="display: none;">
+    <!-- Customer Login Form (Only) -->
+    <form method="POST" action="/login" class="auth-form">
       <input type="hidden" name="login_type" value="customer">
       <p class="auth-subtitle">Enter your registered phone number.</p>
 
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} py-2 small">{{ message }}</div>
+        {% endfor %}
+      {% endwith %}
+
       <label class="form-label" for="customerPhone">Phone Number *</label>
-      <input type="text" class="form-control auth-input" id="customerPhone" name="phone" placeholder="1234567890" required data-trim>
+      <input type="text" class="form-control auth-input" id="customerPhone" name="phone" placeholder="1234567890" required autofocus data-trim>
       <div class="invalid-feedback" id="customerPhoneError" style="display:none; color:#dc3545; font-size:0.875rem; margin-top:0.25rem;"></div>
 
       <button type="submit" class="btn btn-primary w-100 auth-btn" data-loading-submit="true" data-loading-text="Logging in...">
@@ -33,22 +34,6 @@
 
       <p style="text-align:center;margin-top:1rem;font-size:0.9em;color:#666;">New customer? <a href="/register" style="color:#007bff;font-weight:500;">Create your account -></a></p>
     </form>
-
-    <!-- Admin Login Form -->
-    <form method="POST" action="/login" class="auth-form" id="adminLoginForm">
-      <input type="hidden" name="login_type" value="admin">
-      <p class="auth-subtitle">Sign in with your admin ID and password.</p>
-
-      <label class="form-label" for="adminId">Admin ID *</label>
-      <input type="text" class="form-control auth-input" id="adminId" name="admin_id" placeholder="ADMIN001" required data-trim autofocus>
-
-      <label class="form-label" for="adminPassword">Password *</label>
-      <input type="password" class="form-control auth-input" id="adminPassword" name="password" autocomplete="current-password" required>
-
-      <button type="submit" class="btn btn-primary w-100 auth-btn" data-loading-submit="true" data-loading-text="Signing in...">
-        Sign In
-      </button>
-    </form>
   </div>
 </div>
 {% endblock %}
@@ -56,37 +41,12 @@
 {% block extra_scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  const customerLoginBtn = document.getElementById('customerLoginBtn');
-  const adminLoginBtn = document.getElementById('adminLoginBtn');
-  const customerLoginForm = document.getElementById('customerLoginForm');
-  const adminLoginForm = document.getElementById('adminLoginForm');
   const customerPhoneInput = document.getElementById('customerPhone');
-  const adminIdInput = document.getElementById('adminId');
   const customerPhoneError = document.getElementById('customerPhoneError');
+  const form = customerPhoneInput.closest('form');
 
-  // Toggle between login forms
-  customerLoginBtn.addEventListener('click', function() {
-    customerLoginForm.style.display = 'block';
-    adminLoginForm.style.display = 'none';
-    customerLoginBtn.classList.remove('btn-outline-primary');
-    customerLoginBtn.classList.add('btn-primary');
-    adminLoginBtn.classList.remove('btn-secondary');
-    adminLoginBtn.classList.add('btn-outline-secondary');
-    customerPhoneInput.focus();
-  });
-
-  adminLoginBtn.addEventListener('click', function() {
-    customerLoginForm.style.display = 'none';
-    adminLoginForm.style.display = 'block';
-    customerLoginBtn.classList.add('btn-outline-primary');
-    customerLoginBtn.classList.remove('btn-primary');
-    adminLoginBtn.classList.remove('btn-outline-secondary');
-    adminLoginBtn.classList.add('btn-secondary');
-    adminIdInput.focus();
-  });
-
-  // Customer phone validation
-  customerLoginForm.addEventListener('submit', function(event) {
+  // Phone validation on submit
+  form.addEventListener('submit', function(event) {
     customerPhoneError.style.display = 'none';
     customerPhoneError.textContent = '';
 
@@ -108,9 +68,6 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
   });
-
-  // Show customer login by default
-  customerLoginBtn.click();
 });
 </script>
 {% endblock %}

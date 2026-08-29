@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+
+{% block title %}Admin Login - Shreeji Auto Services{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+  <div class="auth-card">
+    <img src="{{ url_for('static', filename='images/logo1.png') }}"
+         class="auth-logo"
+         alt="Logo">
+
+    <h2 class="auth-title">
+      <span>Admin Portal</span>
+    </h2>
+
+    <form method="POST" class="auth-form">
+      <p class="auth-subtitle">Sign in with your admin ID and password.</p>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} py-2 small">{{ message }}</div>
+        {% endfor %}
+      {% endwith %}
+
+      <label class="form-label" for="adminId">Admin ID *</label>
+      <input type="text" class="form-control auth-input" id="adminId" name="admin_id" placeholder="ADMIN001" required autofocus data-trim>
+
+      <label class="form-label" for="adminPassword">Password *</label>
+      <input type="password" class="form-control auth-input" id="adminPassword" name="password" autocomplete="current-password" required>
+
+      <button type="submit" class="btn btn-primary w-100 auth-btn" data-loading-submit="true" data-loading-text="Signing in...">
+        Sign In
+      </button>
+    </form>
+
+    <div class="text-center mt-3">
+      <a href="{{ url_for('main.home') }}" class="text-muted small">
+        &larr; Back to Home
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
