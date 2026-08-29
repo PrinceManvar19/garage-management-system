@@ -5,7 +5,6 @@ from urllib.parse import quote
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for
 
 from db_neon import get_neon_db as get_db
-from models.admin_model import get_admin_by_id, get_admin_by_phone
 from models.booking_model import count_bookings_for_slot, update_message_flags
 from models.customer_model import ensure_customer, get_customer_by_id, get_customer_by_phone
 from models.slot_model import update_slot
@@ -106,61 +105,6 @@ def _get_whatsapp_url(booking_id, booking):
     return f"https://wa.me/91{phone}?text={encoded}"
 
 
-def _lookup_user_by_identifier(identifier):
-    """Legacy login helper: lookup user by admin ID, admin phone, or customer phone.
-    
-    Used only for the legacy /legacy-login route (OTP temporarily disabled).
-    Returns user dict with id, name, phone, role if found, None otherwise.
-    """
-    normalized_identifier = (identifier or "").strip().upper()
-
-    # Check admin first for ADMIN* IDs
-    if normalized_identifier.startswith("ADMIN"):
-        try:
-            admin = get_admin_by_id(normalized_identifier)
-            if admin:
-                return {
-                    "id": admin["id"],
-                    "name": admin["name"],
-                    "phone": admin.get("phone", ""),
-                    "role": "admin",
-                }
-        except Exception as error:
-            log_action("ADMIN LOOKUP ERROR", str(error))
-        return None
-
-    # Check admin by registered phone
-    normalized_phone = normalize_phone(identifier)
-    if len(normalized_phone) == 10:
-        try:
-            admin = get_admin_by_phone(normalized_phone)
-            if admin:
-                return {
-                    "id": admin["id"],
-                    "name": admin["name"],
-                    "phone": admin.get("phone", ""),
-                    "role": "admin",
-                }
-        except Exception as error:
-            log_action("ADMIN PHONE LOOKUP ERROR", str(error))
-
-    # Check customer by phone
-    if len(normalized_phone) == 10:
-        try:
-            customer = get_customer_by_phone(normalized_phone)
-            if customer:
-                return {
-                    "id": customer["id"],
-                    "name": customer["name"],
-                    "phone": customer.get("phone", ""),
-                    "role": "customer",
-                }
-        except Exception as error:
-            log_action("CUSTOMER LOOKUP ERROR", str(error))
-
-    return None
-
-
 def _redirect_with_whatsapp(booking_id, booking, fallback_response):
     whatsapp_url = _get_whatsapp_url(booking_id, booking)
     if not whatsapp_url:
@@ -233,28 +177,6 @@ def _handle_walkin_submission(form, default_date, performed_by=None):
         performed_by=performed_by,
         slot_id=slot_id,
     )
-
-
-@web_admin_bp.route("/legacy-login", methods=["GET", "POST"])
-def web_admin_login():
-    # Admin email OTP is temporarily disabled for now.
-    session.pop("admin_otp", None)
-
-    if request.method == "POST":
-        identifier = request.form.get("identifier", "").strip()
-        try:
-            user = _lookup_user_by_identifier(identifier)
-            if user and user["role"] == "admin":
-                session.clear()
-                set_user_session(user["id"], user["name"], user["role"], user.get("phone", ""))
-                flash("Login successful!", "success")
-                return redirect(url_for("web_admin.web_admin_dashboard"))
-        except Exception as error:
-            log_action("WEB ADMIN LOGIN ERROR", f"{identifier}: {error}")
-
-        flash("Invalid admin credentials. Please check and try again.", "error")
-
-    return render_template("web_admin_login.html")
 
 
 @web_admin_bp.route("/legacy-logout")
